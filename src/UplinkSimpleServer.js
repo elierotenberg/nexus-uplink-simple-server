@@ -4,29 +4,48 @@ const co = require('co');
 const EventEmitter = require('events').EventEmitter;
 const bodyParser = require('body-parser');
 
+const Router = require('nexus-router');
 const Connection = require('./Connection');
 const Session = require('./Session');
 
 class UplinkSimpleServer {
-  constructor({ pid = null, stores = {}, rooms = [], actions = {} }) {
-    pid = pid || _.guid('SimpleUplinkServer');
-    _.dev(() => pid.should.be.a.String &&
-      stores.should.be.an.Object &&
-      Object.keys(stores)
-      .map((path) => path.should.be.a.String && (stores[path] === null || _.isObject(stores[path])).should.be.ok) &&
-      rooms.shoud.be.an.Array &&
-      Object.keys(rooms)
-      .map((room) => room.should.be.a.String) &&
-      actions.should.be.an.Object &&
-      Object.keys(actions)
-      .map((action) => action.should.be.a.String && actions[action].should.be.a.Function)
-    );
-    this.stores = stores;
-    this.rooms = rooms;
-    this.actions = actions;
-    this.sessions = {};
-    this.subscribers = {};
-    this.listeners = {};
+  // stores, rooms, and actions are all three Object maps
+  // that will eventually be constructed into Router instances.
+  // stores map to functions returning their internal key mapping (or null to blacklist).
+  // rooms map to functions returning their internal key mapping (or null to blacklist).
+  // actions map to handlers, which must return a resolution Promise (or null to blacklist).
+  constructor({ pid = null, stores, rooms, actions }) {
+    _.extend(this, {
+      stores: new Router(stores).default((path) => { err: 'Path not found', code: '404' }),
+      rooms: new Router(rooms).default((room) => false),
+      actions: new Router(actions).default((action, params) => Promise.reject({ err: 'Action not found', code: 404 })),
+    });
+    this.data = {};
+  }
+
+  pull(path) {
+
+    let defaultValue = this.stores.match(path);
+  }
+
+  subscribeTo(path, update) {
+
+  }
+
+  unsubscribeFrom(subscription) {
+
+  }
+
+  listenTo(room, emit) {
+
+  }
+
+  unlistenTo(listener) {
+
+  }
+
+  dispatch(action, params) {
+
   }
 }
 
