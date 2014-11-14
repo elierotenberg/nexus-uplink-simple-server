@@ -6,6 +6,42 @@ const HTTPExceptions = require('http-exceptions');
 const Connection = require('./Connection');
 const Session = require('./Session');
 
+const ioHandlers = {
+  connection(socket) {
+    _.dev(() => socket.should.be.an.Object &&
+      socket.on.should.be.a.Function &&
+      socket.emit.should.be.a.Function &&
+      socket.id.should.be.a.String &&
+      this.connections[socket.id].should.not.be.ok
+    );
+    this.connections[socket.id] = new Connection({ id: socket.id, uplink: this });
+    socket.on('disconnect', () => ioHandlers.disconnection.call(this, socket));
+  },
+
+  disconnection(socket) {
+    _.dev(() => socket.should.be.an.Object &&
+      socket.on.should.be.a.Function &&
+      socket.emit.should.be.a.Function &&
+      socket.id.should.be.a.String &&
+      this.connections[socket.id].should.be.exactly(socket)
+    );
+    this.connections[socket.id].destroy();
+    delete this.connections[socket.id];
+  }
+};
+
+const httpHandlers = {
+  get(req, res, next) {
+
+  },
+
+  post(req, res, next) {
+    return _.copromise(function*() {
+
+    });
+  },
+}
+
 // Most public methods expose an async API
 // to enforce consistence with async data backends,
 // eg. redis or mysql, although in this implementation
@@ -29,6 +65,17 @@ class UplinkSimpleServer {
     // Store data cache
     this._data = {};
 
+    // Connections represent actual living socket.io connections.
+    // Session represent a remote Uplink client instance, with a unique guid.
+    // The concept of session enforces consistency between its attached socket connections,
+    // and HTTP requests.
+    // A single session can be attached to zero or more than one connection.
+    // Uplink frames are received from and sent to sessions, not connection.
+    // Each session must keep references to its attached connections and propagate
+    // relevant frames accordingly.
+    this.connections = {};
+    this.sessions = {};
+
     this.subscribers = {};
     this.listeners = {};
     this.actionHandlers = {};
@@ -40,20 +87,57 @@ class UplinkSimpleServer {
       app.get.should.be.a.Function &&
       app.post.should.be.a.Function
     );
+    // socket.io handlers are installed first, to pre-empt some paths over the http handlers.
     let io = require('socket.io')(app);
+    // Delegate to static ioHandler methods, but call them with context.
     Object.keys(ioHandlers)
     .forEach((event) => io.on(event, () => ioHandlers[event].apply(this, arguments)));
 
-    app.get((req, res, next) => httpHandlers.get.call(this, req, res, next));
-    app.post((req, res, next) => httpHandlers.post.call(this, req, res, next));
+    // Fetch from store
+    app.get('*',
+      // Check that this store path is whitelisted
+      (req, res, next) => this.stores.match(req.path) === null ? HTTPExceptions.forward(res, new HTTPExceptions.NotFound(req.path)) : next(),
+      (req, res) => this.pull(req.path)
+        .then((value) => {
+          _.dev(() => (value === null || _.isObject(value)).should.be.ok);
+          res.status(200).type('application/json').send(value);
+        })
+        .catch((err) => {
+          _.dev(() => { console.error(err, err.stack); });
+          if(err instanceof HTTPExceptions.HTTPError) {
+            HTTPExceptions.forward(res, err);
+          }
+          else {
+            res.status(500).json({ err: err.toString() });
+          }
+        })
+    );
+
+    // Dispatch action after parsing JSON body.
+    app.post('*',
+      bodyParser.json(),
+      // Check that this action path is whitelisted
+      (req, res, next) => this.actions.match(req.path) === null ? HTTPExceptions.forward(res, new HTTPExceptions.NotFound(req.path)) : next(),
+      (req, res, next) => !req.body.action ? HTTPExceptions.forward(res, new HTTPExceptions.BadRequest('Missing required field: \'action\'')) : next(),
+      (req, res, next) => !req.body.params ? HTTPExceptions.forward(res, new HTTPExceptions.BadRequest('Missing required field: \'param\'')) : next(),
+      (req, res, next) => !req.body.guid ?   HTTPExceptions.forward(res, new HTTPExceptions.Unauthorized('Missing required field: \'guid\'')) : next(),
+      (req, res, next) => !this.isActiveSession(req.body.guid) ? HTTPExceptions.forward(res, HTTPExceptions.Unauthorized('Invalid \'guid\'.')) : next(),
+      (req, res) => this.dispatch(req.body.)
+      .then((result) => {
+
+      })
+      .catch((err) => {
+
+      })
+    );
     return this;
   }
 
   pull(path) {
     return Promise.try(() => {
-      if(this.stores.match(path) === null) {
-        throw new HTTPExceptions.NotFound(path);
-      }
+      _.dev(() => path.should.be.a.String &&
+        (this.stores.match(path) !== null).should.be.ok
+      );
       return this._data[path];
     });
   }
@@ -68,6 +152,7 @@ class UplinkSimpleServer {
         // Diff and JSON-encode as early as possible to avoid duplicating
         // these lengthy calculations down the propagation tree.
         let hash, diff;
+        // If no value was present before, then nullify the hash. No value has a null hash.
         if(!this._data[path]) {
           hash = null;
         }
@@ -199,7 +284,8 @@ class UplinkSimpleServer {
     );
     // Loop through the list of handlers here;
     // We don't expect to have _that_ much different handlers
-    // for a given action.
+    // for a given action, so performance implications
+    // should be completely negligible.
     this.actions[path] = _.without(this.actions[path], handler);
     let deletedAction = false;
     if(this.actions[path].length === 0) {
@@ -217,6 +303,8 @@ class UplinkSimpleServer {
       );
       // Run all handlers concurrently and return the list of the results
       // (empty list if no handlers).
+      // If an action handler throws, then dispatch will throw, but the others handlers
+      // can still succeed.
       return yield (this.actionHandlers[action] ? this.actionHandlers[action] : [])
       .map((handler) => handler.call(null, params));
     }, this);
@@ -227,7 +315,12 @@ _.extend(UplinkSimpleServer.prototype, {
   stores: null,
   rooms: null,
   actions: null,
+
   _data: null,
+
+  connections: null,
+  sessions: null,
+
   subscribers: null,
   listeners: null,
   actionHandlers: null,
