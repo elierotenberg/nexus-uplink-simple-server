@@ -32,7 +32,7 @@
     "bluebird": "^2.3.11",
     "body-parser": "^1.9.2",
     "co": "^3.1.0",
-    "http-exceptions": "^0.1.0",
+    "http-exceptions": "^0.2.0",
     "lodash-next": "^1.0.1",
     "nexus-router": "^0.1.2",
     "should": "^4.2.1",
