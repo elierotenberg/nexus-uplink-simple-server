@@ -308,18 +308,34 @@ class UplinkSimpleServer {
     return !!this.sessions[guid];
   }
 
-  getSession(guid) {
+  createSession(guid) {
     _.dev(() => guid.should.be.a.String);
     if(!this.sessions[guid]) {
-      this.sessions[guid] = new Session({ guid, uplink: this });
+      this.sessions[guid] = this.sessionCreated(new Session({ guid, uplink: this }));
     }
     return this.sessions[guid];
   }
 
-  expireSession(guid) {
+  deleteSession(guid) {
     _.dev(() => guid.should.be.a.String);
-    this.sessions[guid].destroy();
+    let session = this.sessions[guid];
+    session.destroy();
     delete this.sessions[guid];
+    return this.sessionDeleted(session);
+  }
+
+  // No-op placeholder, to be overridden by subclasses to initialize
+  // session-related resources.
+  // Implementation should return a Promise for the created session.
+  sessionCreated(session) {
+    return Promise.resolve(session);
+  }
+
+  // No-op placeholder, to be overridden by subclasses to clean-up
+  // session-related resources.
+  // Implementation should return a Promise for the deleted session.
+  sessionDeleted(session) {
+    return Promise.resolve(session);
   }
 }
 

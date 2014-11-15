@@ -16,6 +16,7 @@ module.exports = function({ Connection, UplinkSimpleServer }) {
       this.listeners = {};
 
       this.timeout = null;
+      this.expired = false;
       this.pause();
     }
 
@@ -50,6 +51,18 @@ module.exports = function({ Connection, UplinkSimpleServer }) {
       return this;
     }
 
+    expire() {
+      this.expired = true;
+      return this.uplink.deleteSession(this);
+    }
+
+    pause() {
+      _.dev(() => this.paused.should.not.be.ok);
+      this.timeout = setTimeout(() => this.expire(), EXPIRE_TIMEOUT);
+      return this;
+    }
+
+
     resume() {
       _.dev(() => this.paused.should.be.ok);
       // Prevent the expiration timeout
@@ -71,13 +84,6 @@ module.exports = function({ Connection, UplinkSimpleServer }) {
       }
       return this;
     }
-
-    pause() {
-      _.dev(() => this.paused.should.not.be.ok);
-      this.timeout = setTimeout(() => this.expire(), EXPIRE_TIMEOUT);
-      return this;
-    }
-
     update({ path, diff, hash }) {
       return this.proxy('update')({ path, diff, hash });
     }
@@ -140,6 +146,9 @@ module.exports = function({ Connection, UplinkSimpleServer }) {
     uplink: null,
     connections: null,
     timeout: null,
+    expired: null,
+    subscriptions: null,
+    listeners: null,
   });
 
   return Session;

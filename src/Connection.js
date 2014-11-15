@@ -6,13 +6,14 @@ module.exports = function({ UplinkSimpleServer }) {
   const ioHandlers = {
     handshake({ guid }) {
       return Promise.try(() => {
-        (() => this.handshake.isPending().should.not.be.ok &&
-          guid.should.be.a.String &&
-          this.uplink.hasSession(guid).should.be.ok
-        )();
-        this.uplink.getSession(guid).attach(this);
-        this._handshake.resolve(guid);
-        return this.handshakeAck(this.uplink.pid);
+        // shadok assert
+        (() => this.handshake.isPending().should.not.be.ok && guid.should.be.a.String)();
+        this.uplink.getSession(guid)
+        .then((session) => {
+          session.attach(this);
+          this._handshake.resolve(session);
+          return this.handshakeAck(this.uplink.pid);
+        });
       });
     },
 
@@ -20,19 +21,23 @@ module.exports = function({ UplinkSimpleServer }) {
     // its the responsibility of the underlying connection to handle and maintain state.
 
     subscribeTo({ path }) {
-      return this.handshake.then((guid) => this.uplink.getSession(guid).subscribeTo(path));
+      return this.handshake
+      .then((session) => session.subscribeTo(path));
     },
 
     unsubscribeFrom({ path }) {
-      return this.handshake.then((guid) => this.uplink.getSession(guid).unsubscribeFrom(path));
+      return this.handshake
+      .then((session) => session.unsubscribeFrom(path));
     },
 
     listenTo({ room }) {
-      return this.handshake.then((guid) => this.uplink.getSession(guid).listenTo(room));
+      return this.handshake
+      .then((session) => session.listenTo(room));
     },
 
     unlistenFrom({ room }) {
-      return this.handshake.then((guid) => this.uplink.getSession(guid).unlistenFrom(room));
+      return this.handshake
+      .then((session) => session.listenTo(room));
     },
   };
 
@@ -42,6 +47,7 @@ module.exports = function({ UplinkSimpleServer }) {
         uplink.should.be.an.instanceOf(UplinkSimpleServer)
       );
       this.socket = socket;
+      // handshake should resolve to the session this connection will be attached to
       this.handshake = new Promise((resolve, reject) => this._handshake = resolve).cancellable();
       Object.keys(ioHandlers)
       .forEach((event) =>
@@ -61,7 +67,8 @@ module.exports = function({ UplinkSimpleServer }) {
         this.handshake.cancel();
       }
       else {
-        this.handshake.then((guid) => this.uplink.getSession(guid).detach(this));
+        this.handshake
+        .then((session) => session.detach(this));
       }
       this.socket.close();
     }
