@@ -1,10 +1,11 @@
 const _ = require('lodash-next');
+const should = _.should;
 const bodyParser = require('body-parser');
 const ConstantRouter = require('nexus-router').ConstantRouter;
 const HTTPExceptions = require('http-exceptions');
 
-const Connection = require('./Connection');
-const Session = require('./Session');
+const Connection = require('./Connection')({ UplinkSimpleServer });
+const Session = require('./Session')({ Connection, UplinkSimpleServer });
 const instanceOfSocketIO = require('./instanceOfSocketIO');
 
 const ioHandlers = {
@@ -310,9 +311,15 @@ class UplinkSimpleServer {
   getSession(guid) {
     _.dev(() => guid.should.be.a.String);
     if(!this.sessions[guid]) {
-      this.sessions[guid] = new Session(guid);
+      this.sessions[guid] = new Session({ guid, uplink: this });
     }
     return this.sessions[guid];
+  }
+
+  expireSession(guid) {
+    _.dev(() => guid.should.be.a.String);
+    this.sessions[guid].destroy();
+    delete this.sessions[guid];
   }
 }
 
