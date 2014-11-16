@@ -133,31 +133,29 @@ class UplinkSimpleServer {
     });
   }
 
-  update(path, value) {
-    return _.copromise(function*() {
-      _.dev(() => path.should.be.a.String &&
-        value.should.be.an.Object &&
-        (this.stores.match(path) !== null).should.be.ok
-      );
-      if(this.subscribers[path]) {
-        // Diff and JSON-encode as early as possible to avoid duplicating
-        // these lengthy calculations down the propagation tree.
-        let hash, diff;
-        // If no value was present before, then nullify the hash. No value has a null hash.
-        if(!this._data[path]) {
-          hash = null;
-        }
-        else {
-          hash = _.hash(this._data[path]);
-          diff = _.diff(this._data[path], value);
-        }
-        yield Object.keys(this.subscribers[path])
-        // Directly pass the patch, sessions don't need to be aware
-        // of the actual contents; they only need to forward the diff
-        // to their associated clients.
-        .map((session) => session.update(path, { hash, diff }));
+  *update(path, value) { // jshint ignore:line
+    _.dev(() => path.should.be.a.String &&
+      value.should.be.an.Object &&
+      (this.stores.match(path) !== null).should.be.ok
+    );
+    let hash, diff;
+    if(this.subscribers[path]) {
+      // Diff and JSON-encode as early as possible to avoid duplicating
+      // these lengthy calculations down the propagation tree.
+      // If no value was present before, then nullify the hash. No value has a null hash.
+      if(!this._data[path]) {
+        hash = null;
       }
-    }, this);
+      else {
+        hash = _.hash(this._data[path]);
+        diff = _.diff(this._data[path], value);
+      }
+      // Directly pass the patch, sessions don't need to be aware
+      // of the actual contents; they only need to forward the diff
+      // to their associated clients.
+      yield Object.keys(this.subscribers[path]) // jshint ignore:line
+      .map((session) => session.update(path, { hash, diff }));
+    }
   }
 
   subscribeTo(path, session) {
@@ -199,20 +197,19 @@ class UplinkSimpleServer {
     return { deletedPath };
   }
 
-  emit(room, params) {
-    return _.copromise(function*() {
-      _.dev(() => room.should.be.a.String &&
-        params.should.be.an.Object &&
-        (this.rooms.match(room) !== null).should.be.ok
-      );
-      if(this.listeners[room]) {
-        // Encode as early as possible to avoid duplicating
-        // this operation down the propagation tree.
-        let json = JSON.stringify(params);
-        yield Object.keys(this.listeners[room])
-        .map((session) => session.emit(room, json));
-      }
-    }, this);
+  *emit(room, params) { // jshint ignore:line
+    _.dev(() => room.should.be.a.String &&
+      params.should.be.an.Object &&
+      (this.rooms.match(room) !== null).should.be.ok
+    );
+    let json;
+    if(this.listeners[room]) {
+      // Encode as early as possible to avoid duplicating
+      // this operation down the propagation tree.
+      json = JSON.stringify(params);
+      yield Object.keys(this.listeners[room]) // jshint ignore:line
+      .map((session) => session.emit(room, json));
+    }
   }
 
   listenTo(room, session) {
@@ -286,20 +283,18 @@ class UplinkSimpleServer {
     return { deletedAction };
   }
 
-  dispatch(action, params = {}) {
-    return _.copromise(function*() {
-      _.dev(() => action.should.be.a.String &&
-        params.should.be.an.Object &&
-        params.guid.should.be.a.String &&
-        (this.actions[action].match(action) !== null).should.be.ok
-      );
-      // Run all handlers concurrently and return the list of the results
-      // (empty list if no handlers).
-      // If an action handler throws, then dispatch will throw, but the others handlers
-      // can still succeed.
-      return yield (this.actionHandlers[action] ? this.actionHandlers[action] : [])
-      .map((handler) => handler.call(null, params));
-    }, this);
+  *dispatch(action, params = {}) { // jshint ignore:line
+    _.dev(() => action.should.be.a.String &&
+      params.should.be.an.Object &&
+      params.guid.should.be.a.String &&
+      (this.actions[action].match(action) !== null).should.be.ok
+    );
+    // Run all handlers concurrently and return the list of the results
+    // (empty list if no handlers).
+    // If an action handler throws, then dispatch will throw, but the others handlers
+    // can still succeed.
+    return yield (this.actionHandlers[action] ? this.actionHandlers[action] : []) // jshint ignore:line
+    .map((handler) => handler.call(null, params));
   }
 
   hasSession(guid) {
