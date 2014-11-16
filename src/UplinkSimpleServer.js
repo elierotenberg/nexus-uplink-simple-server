@@ -2,6 +2,7 @@ const _ = require('lodash-next');
 const bodyParser = require('body-parser');
 const ConstantRouter = require('nexus-router').ConstantRouter;
 const HTTPExceptions = require('http-exceptions');
+const http = require('http');
 
 const instanceOfSocketIO = require('./instanceOfSocketIO');
 let Connection, Session;
@@ -73,7 +74,7 @@ class UplinkSimpleServer {
       app.post.should.be.a.Function
     );
     // socket.io handlers are installed first, to pre-empt some paths over the http handlers.
-    let io = require('socket.io')(app);
+    let io = require('socket.io')(http.Server(app));
     // Delegate to static ioHandler methods, but call them with context.
     Object.keys(ioHandlers)
     .forEach((event) => io.on(event, () => ioHandlers[event].apply(this, arguments)));
