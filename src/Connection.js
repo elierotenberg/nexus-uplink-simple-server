@@ -1,6 +1,5 @@
 module.exports = function({ UplinkSimpleServer }) {
   const _ = require('lodash-next');
-  const should = _.should;
   const instanceOfSocketIO = require('./instanceOfSocketIO');
 
   const ioHandlers = {
@@ -48,13 +47,14 @@ module.exports = function({ UplinkSimpleServer }) {
       );
       this.socket = socket;
       // handshake should resolve to the session this connection will be attached to
-      this.handshake = new Promise((resolve, reject) => this._handshake = resolve).cancellable();
+      this.handshake = new Promise((resolve, reject) => this._handshake = { resolve, reject }).cancellable();
       Object.keys(ioHandlers)
       .forEach((event) =>
-        socket.on(event, (...args) =>
-          ioHandlers[event].call(this, ...args)
-          .catch((err) => this.err({ err: err.toString, event, args }))
-        )
+        socket.on(event, () => {
+          let args = arguments;
+          return ioHandlers[event].apply(this, args)
+          .catch((err) => this.err({ err: err.toString, event, args }));
+        })
       );
     }
 

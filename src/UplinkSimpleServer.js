@@ -1,12 +1,10 @@
 const _ = require('lodash-next');
-const should = _.should;
 const bodyParser = require('body-parser');
 const ConstantRouter = require('nexus-router').ConstantRouter;
 const HTTPExceptions = require('http-exceptions');
 
-const Connection = require('./Connection')({ UplinkSimpleServer });
-const Session = require('./Session')({ Connection, UplinkSimpleServer });
 const instanceOfSocketIO = require('./instanceOfSocketIO');
+let Connection, Session;
 
 const ioHandlers = {
   connection(socket) {
@@ -207,11 +205,11 @@ class UplinkSimpleServer {
         params.should.be.an.Object &&
         (this.rooms.match(room) !== null).should.be.ok
       );
-      if(this.listeners[path]) {
+      if(this.listeners[room]) {
         // Encode as early as possible to avoid duplicating
         // this operation down the propagation tree.
         let json = JSON.stringify(params);
-        yield Object.keys(this.listeners[path])
+        yield Object.keys(this.listeners[room])
         .map((session) => session.emit(room, json));
       }
     }, this);
@@ -222,16 +220,16 @@ class UplinkSimpleServer {
       session.should.be.an.instanceOf(Session)
     );
     let createdRoom;
-    if(this.listeners[path]) {
+    if(this.listeners[room]) {
       // Fail early to avoid creating a leaky entry in this.listeners
-      _.dev(() => this.listeners[path][session.id].should.not.be.ok);
+      _.dev(() => this.listeners[room][session.id].should.not.be.ok);
       createdRoom = false;
     }
     else {
-      this.listeners[path] = {};
+      this.listeners[room] = {};
       createdRoom = true;
     }
-    this.listeners[path][session.id] = session;
+    this.listeners[room][session.id] = session;
     // Return a flag indicating whether this is the first listener
     // to this room; can be useful to implement subclass-specific handling
     // (e.g. subscribe to an external backend)
@@ -246,7 +244,7 @@ class UplinkSimpleServer {
     let deletedRoom = false;
     delete this.listeners[room][session.id];
     if(Object.keys(this.listeners[room]).length === 0) {
-      delete this.listeners[path];
+      delete this.listeners[room];
       deletedRoom = true;
     }
     // Return a flag indicating whether this was the last listener
@@ -261,11 +259,11 @@ class UplinkSimpleServer {
       (this.actions.match(action) !== null).should.be.ok
     );
     let createdAction = false;
-    if(!this.actions[path]) {
-      this.actions[path] = [];
+    if(!this.actions[action]) {
+      this.actions[action] = [];
       createdAction = true;
     }
-    this.actions[path].push(handler);
+    this.actions[action].push(handler);
     return { createdAction };
   }
 
@@ -279,10 +277,10 @@ class UplinkSimpleServer {
     // We don't expect to have _that_ much different handlers
     // for a given action, so performance implications
     // should be completely negligible.
-    this.actions[path] = _.without(this.actions[path], handler);
+    this.actions[action] = _.without(this.actions[action], handler);
     let deletedAction = false;
-    if(this.actions[path].length === 0) {
-      delete this.actions[path];
+    if(this.actions[action].length === 0) {
+      delete this.actions[action];
       deletedAction = true;
     }
     return { deletedAction };
@@ -353,5 +351,8 @@ _.extend(UplinkSimpleServer.prototype, {
   listeners: null,
   actionHandlers: null,
 });
+
+Connection = require('./Connection')({ UplinkSimpleServer });
+Session = require('./Session')({ Connection, UplinkSimpleServer });
 
 module.exports = UplinkSimpleServer;

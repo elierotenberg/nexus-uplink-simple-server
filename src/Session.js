@@ -1,6 +1,5 @@
 module.exports = function({ Connection, UplinkSimpleServer }) {
   const _ = require('lodash-next');
-  const should = _.should;
 
   const EXPIRE_TIMEOUT = 30000;
 
@@ -35,7 +34,7 @@ module.exports = function({ Connection, UplinkSimpleServer }) {
 
     // Just proxy the invocation to all attached connections, which implement the same APIs.
     proxy(method) {
-      return (...args) => Object.keys(this.connections).map((id) => this.connections[id][method](...args));
+      return () => { let args = arguments; return Object.keys(this.connections).map((id) => this.connections[id][method](...args)); };
     }
 
     attach(connection) {

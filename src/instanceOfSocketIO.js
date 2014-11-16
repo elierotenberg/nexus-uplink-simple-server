@@ -1,3 +1,4 @@
+const _ = require('lodash-next');
 // ducktype-check for socket.io instance
 module.exports = (socket) =>
   _.isObject(socket) &&
