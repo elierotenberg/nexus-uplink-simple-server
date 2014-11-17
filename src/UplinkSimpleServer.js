@@ -211,7 +211,7 @@ class UplinkSimpleServer {
     if(this.listeners[room]) {
       // Encode as early as possible to avoid duplicating
       // this operation down the propagation tree.
-      json = JSON.stringify(params);
+      json = _.prollystringify(params);
       yield Object.keys(this.listeners[room]) // jshint ignore:line
       .map((session) => session.emit(room, json));
     }
