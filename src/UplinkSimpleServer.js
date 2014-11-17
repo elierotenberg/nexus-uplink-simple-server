@@ -37,16 +37,22 @@ class UplinkSimpleServer {
   // stores, rooms, and actions are three whitelists of
   // string patterns. Each is an array that will be passed
   // to the Router constructor.
-  constructor({ pid, stores, rooms, actions }) {
+  constructor({ pid, stores, rooms, actions, app }) {
     _.dev(() => stores.should.be.an.Array &&
       rooms.should.be.an.Array &&
-      actions.should.be.an.Array
+      actions.should.be.an.Array &&
+      app.should.be.an.Object &&
+      // Ducktype-check for an express-like app
+      app.get.should.be.a.Function &&
+      app.post.should.be.a.Function
     );
     // Here we use ConstantRouter instances; we only need
     // to know if a given string match a registered pattern.
     this.stores = new ConstantRouter(stores);
     this.rooms = new ConstantRouter(rooms);
     this.actions = new ConstantRouter(actions);
+    this.app = app;
+    this.server = http.Server(app);
 
     // Store data cache
     this._data = {};
@@ -67,14 +73,11 @@ class UplinkSimpleServer {
     this.actionHandlers = {};
   }
 
-  attach(app) {
-    _.dev(() => app.should.be.an.Object &&
-      // Ducktype-check for an express-like app
-      app.get.should.be.a.Function &&
-      app.post.should.be.a.Function
-    );
+  listen(port) {
+    _.dev(() => port.should.be.a.Number);
+    let { app, server } = this;
     // socket.io handlers are installed first, to pre-empt some paths over the http handlers.
-    let io = require('socket.io')(http.Server(app));
+    let io = require('socket.io')(server);
     // Delegate to static ioHandler methods, but call them with context.
     Object.keys(ioHandlers)
     .forEach((event) => io.on(event, () => ioHandlers[event].apply(this, arguments)));
@@ -122,6 +125,7 @@ class UplinkSimpleServer {
           }
       })
     );
+    server.listen(port);
     return this;
   }
 
@@ -337,6 +341,8 @@ _.extend(UplinkSimpleServer.prototype, {
   stores: null,
   rooms: null,
   actions: null,
+  app: null,
+  server: null,
 
   _data: null,
 
