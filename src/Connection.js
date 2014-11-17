@@ -51,6 +51,7 @@ module.exports = function({ UplinkSimpleServer }) {
       Object.keys(ioHandlers)
       .forEach((event) =>
         socket.on(event, (params) => {
+          _.dev(() => console.warn('nexus-uplink-simple-server', '<<', event, params));
           return ioHandlers[event].call(this, params) // only 1 synthetic 'params' object should be enough
                                                       // and it avoid reading from arguments.
           .catch((e) => {
@@ -65,6 +66,12 @@ module.exports = function({ UplinkSimpleServer }) {
 
     get id() {
       return this.socket.id;
+    }
+
+    push(event, params) {
+      _.dev(() => event.should.be.a.String);
+      _.dev(() => console.warn('nexus-uplink-simple-server', '>>', event, params));
+      this.socket.emit(event, params);
     }
 
     destroy() {
@@ -84,31 +91,31 @@ module.exports = function({ UplinkSimpleServer }) {
     }
 
     handshakeAck(pid) {
-      this.socket.emit('handshakeAck', { pid });
+      this.push('handshakeAck', { pid });
     }
 
     update({ path, diff, hash }) {
-      this.socket.emit('update', { path, diff, hash });
+      this.push('update', { path, diff, hash });
     }
 
     emit({ room, params }) {
-      this.socket.emit('emit', { room, params });
+      this.push('emit', { room, params });
     }
 
     debug(...args) {
-      this.socket.emit('debug', ...args);
+      this.push('debug', ...args);
     }
 
     log(...args) {
-      this.socket.emit('log', ...args);
+      this.push('log', ...args);
     }
 
     warn(...args) {
-      this.socket.emit('warn', ...args);
+      this.push('warn', ...args);
     }
 
     err(...args) {
-      this.socket.emit('err', ...args);
+      this.push('err', ...args);
     }
   }
 
