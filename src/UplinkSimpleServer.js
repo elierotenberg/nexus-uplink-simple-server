@@ -80,7 +80,7 @@ class UplinkSimpleServer {
     let io = require('socket.io')(server);
     // Delegate to static ioHandler methods, but call them with context.
     Object.keys(ioHandlers)
-    .forEach((event) => io.on(event, function() { ioHandlers[event].apply(this, arguments); }));
+    .forEach((event) => io.on(event, _.scope(ioHandlers[event], this)));
 
     // Fetch from store
     app.get('*',
