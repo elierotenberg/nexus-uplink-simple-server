@@ -50,10 +50,15 @@ module.exports = function({ UplinkSimpleServer }) {
       this.handshake = new Promise((resolve, reject) => this._handshake = { resolve, reject }).cancellable();
       Object.keys(ioHandlers)
       .forEach((event) =>
-        socket.on(event, () => {
-          let args = arguments;
-          return ioHandlers[event].apply(this, args)
-          .catch((err) => this.err({ err: err.toString, event, args }));
+        socket.on(event, (params) => {
+          return ioHandlers[event].call(this, params) // only 1 synthetic 'params' object should be enough
+                                                      // and it avoid reading from arguments.
+          .catch((e) => {
+            let stack = null;
+            let err = e.toString();
+            _.dev(() => stack = e.stack);
+            this.err({ err, event, params, stack });
+          });
         })
       );
     }
