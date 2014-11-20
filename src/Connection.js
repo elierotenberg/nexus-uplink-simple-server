@@ -57,7 +57,9 @@ module.exports = function({ UplinkSimpleServer }) {
           .catch((e) => {
             let stack = null;
             let err = e.toString();
-            _.dev(() => stack = e.stack);
+            if(__DEV__) {
+              stack = e.stack;
+            }
             this.err({ err, event, params, stack });
           });
         })
