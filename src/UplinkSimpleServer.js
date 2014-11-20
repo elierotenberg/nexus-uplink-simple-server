@@ -89,15 +89,16 @@ class UplinkSimpleServer {
       (req, res) => this.pull(req.path)
         .then((value) => {
           _.dev(() => (value === null || _.isObject(value)).should.be.ok);
+          _.dev(() => console.warn(`GET ${req.path}`, value));
           res.status(200).type('application/json').send(value);
         })
-        .catch((err) => {
-          _.dev(() => { console.error(err, err.stack); });
-          if(err instanceof HTTPExceptions.HTTPError) {
-            HTTPExceptions.forward(res, err);
+        .catch((e) => {
+          _.dev(() => console.warn(`GET ${req.path}`, e));
+          if(e instanceof HTTPExceptions.HTTPError) {
+            HTTPExceptions.forward(res, e);
           }
           else {
-            res.status(500).json({ err: err.toString() });
+            res.status(500).json({ err: e.toString() });
           }
         })
     );
@@ -114,14 +115,17 @@ class UplinkSimpleServer {
       (req, res, next) => !req.body.params.guid ? HTTPExceptions.forward(res, new HTTPExceptions.Unauthorized('Missing required field: \'params\'.\'guid\'')) : next(),
       (req, res, next) => !this.isActiveSession(req.body.params.guid) ? HTTPExceptions.forward(res, HTTPExceptions.Unauthorized('Invalid \'guid\'.')) : next(),
       (req, res) => this.dispatch(req.path, req.body.params)
-      .then((result) => res.status(200).json(result))
-      .catch((err) => {
-          _.dev(() => { console.error(err, err.stack); });
-          if(err instanceof HTTPExceptions.HTTPError) {
-            HTTPExceptions.forward(res, err);
+      .then((result) => {
+        _.dev(() => console.warn(`POST ${req.path}`, req.body, result));
+        res.status(200).json(result);
+      })
+      .catch((e) => {
+          _.dev(() => console.warn(`POST ${req.path}`, req.body, e));
+          if(e instanceof HTTPExceptions.HTTPError) {
+            HTTPExceptions.forward(res, e);
           }
           else {
-            res.status(500).json({ err: err.toString() });
+            res.status(500).json({ err: e.toString() });
           }
       })
     );
