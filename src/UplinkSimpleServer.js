@@ -41,7 +41,6 @@ class UplinkSimpleServer {
     _.dev(() => stores.should.be.an.Array &&
       rooms.should.be.an.Array &&
       actions.should.be.an.Array &&
-      app.should.be.an.Object &&
       // Ducktype-check for an express-like app
       app.get.should.be.a.Function &&
       app.post.should.be.a.Function
