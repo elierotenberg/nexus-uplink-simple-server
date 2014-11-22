@@ -49,9 +49,7 @@ module.exports = function({ UplinkSimpleServer }) {
         socket.on(event, (params) => {
           _.dev(() => console.warn('nexus-uplink-simple-server', '<<', event, params));
           ioHandlers[event].call(this, params)
-          .catch((e) => {
-            this.err({ err: e.toString(), event, params, stack: __DEV__ ? e.stack : null });
-          });
+          .catch((e) => this.err({ err: e.toString(), event, params, stack: __DEV__ ? e.stack : null }));
         })
       );
     }
