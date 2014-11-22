@@ -72,7 +72,7 @@ class UplinkSimpleServer {
     this.actionHandlers = {};
   }
 
-  listen(port) {
+  listen(port, fn = _.noop) {
     _.dev(() => port.should.be.a.Number);
     let { app, server } = this;
     // socket.io handlers are installed first, to pre-empt some paths over the http handlers.
@@ -128,7 +128,7 @@ class UplinkSimpleServer {
           }
       })
     );
-    server.listen(port);
+    server.listen(port, fn);
     return this;
   }
 
