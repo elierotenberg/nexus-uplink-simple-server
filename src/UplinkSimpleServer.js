@@ -46,6 +46,7 @@ class UplinkSimpleServer {
       app.get.should.be.a.Function &&
       app.post.should.be.a.Function
     );
+    this.pid = pid;
     // Here we use ConstantRouter instances; we only need
     // to know if a given string match a registered pattern.
     this.stores = new ConstantRouter(stores);
