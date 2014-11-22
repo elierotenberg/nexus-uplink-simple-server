@@ -47,7 +47,7 @@ module.exports = function({ Connection, UplinkSimpleServer }) {
       // If the session was paused (no connec attached)
       // then resume it
       if(this.paused) {
-        this.resumse();
+        this.resume();
       }
       return this;
     }
