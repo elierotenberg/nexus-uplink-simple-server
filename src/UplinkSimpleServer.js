@@ -310,7 +310,7 @@ class UplinkSimpleServer {
     return !!this.sessions[guid];
   }
 
-  createSession(guid) {
+  getSession(guid) {
     _.dev(() => guid.should.be.a.String);
     if(!this.sessions[guid]) {
       this.sessions[guid] = this.sessionCreated(new Session({ guid, uplink: this }));
