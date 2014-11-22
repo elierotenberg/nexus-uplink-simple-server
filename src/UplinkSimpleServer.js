@@ -38,7 +38,8 @@ class UplinkSimpleServer {
   // string patterns. Each is an array that will be passed
   // to the Router constructor.
   constructor({ pid, stores, rooms, actions, app }) {
-    _.dev(() => stores.should.be.an.Array &&
+    _.dev(() => (pid !== undefined).should.be.ok &&
+      stores.should.be.an.Array &&
       rooms.should.be.an.Array &&
       actions.should.be.an.Array &&
       // Ducktype-check for an express-like app
