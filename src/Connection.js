@@ -2,43 +2,38 @@ module.exports = function({ UplinkSimpleServer }) {
   const _ = require('lodash-next');
   const instanceOfSocketIO = require('./instanceOfSocketIO');
 
-  const ioHandlers = {
-    handshake({ guid }) {
-      return Promise.try(() => {
-        // shadok assert
-        (() => this.handshake.isPending().should.be.ok && guid.should.be.a.String)();
-        this.uplink.getSession(guid)
-        .then((session) => {
-          session.attach(this);
-          this._handshake.resolve(session);
-          return this.handshakeAck(this.uplink.pid);
-        });
-      });
+  const ioHandlers = _.mapValues({
+    *handshake({ guid }) {
+      (() => this.handshake.isPending().should.be.ok && guid.should.be.a.String)();
+      const session = yield this.uplink.getSession(guid);
+      session.attach(this);
+      this._handshake.resolve(session);
+      this.handshakeAck(this.uplink.pid);
     },
 
     // subscriptions and listeners are stateless from the connections' point of view.
     // its the responsibility of the underlying connection to handle and maintain state.
 
-    subscribeTo({ path }) {
-      return this.handshake
-      .then((session) => session.subscribeTo(path));
+    *subscribeTo({ path }) {
+      (() => path.should.be.a.String)();
+      return (yield this.handshake).subscribeTo(path);
     },
 
-    unsubscribeFrom({ path }) {
-      return this.handshake
-      .then((session) => session.unsubscribeFrom(path));
+    *unsubscribeFrom({ path }) {
+      (() => path.should.be.a.String)();
+      return (yield this.handshake).unsubscribeFrom(path);
     },
 
-    listenTo({ room }) {
-      return this.handshake
-      .then((session) => session.listenTo(room));
+    *listenTo({ room }) {
+      (() => room.should.be.a.String)();
+      return (yield this.handshake).listenTo(room);
     },
 
-    unlistenFrom({ room }) {
-      return this.handshake
-      .then((session) => session.listenTo(room));
+    *unlistenFrom({ room }) {
+      (() => room.should.be.a.String)();
+      return (yield this.handshake).unlistenFrom(room);
     },
-  };
+  }, _.co.wrap);
 
   class Connection {
     constructor({ socket, uplink }) {
@@ -53,8 +48,7 @@ module.exports = function({ UplinkSimpleServer }) {
       .forEach((event) =>
         socket.on(event, (params) => {
           _.dev(() => console.warn('nexus-uplink-simple-server', '<<', event, params));
-          return ioHandlers[event].call(this, params) // only 1 synthetic 'params' object should be enough
-                                                      // and it avoid reading from arguments.
+          ioHandlers[event].call(this, params)
           .catch((e) => {
             this.err({ err: e.toString(), event, params, stack: __DEV__ ? e.stack : null });
           });
