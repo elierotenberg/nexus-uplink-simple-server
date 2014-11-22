@@ -46,6 +46,7 @@ module.exports = function({ UplinkSimpleServer }) {
         uplink.should.be.an.instanceOf(UplinkSimpleServer)
       );
       this.socket = socket;
+      this.uplink = uplink;
       // handshake should resolve to the session this connection will be attached to
       this.handshake = new Promise((resolve, reject) => this._handshake = { resolve, reject }).cancellable();
       Object.keys(ioHandlers)
