@@ -39,7 +39,7 @@ module.exports = function({ Connection, UplinkSimpleServer }) {
 
     attach(connection) {
       _.dev(() => connection.should.be.an.instanceOf(Connection) &&
-        this.connection.should.not.have.property(connection.id)
+        this.connections.should.not.have.property(connection.id)
       );
       this.connections[connection.id] = connection;
       // If the session was paused (no connec attached)
