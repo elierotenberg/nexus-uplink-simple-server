@@ -34,7 +34,7 @@
     "co": "^4.0.0",
     "http-exceptions": "^0.4.0",
     "lodash-next": "^1.7.0",
-    "nexus-router": "^0.1.4",
+    "nexus-router": "^0.2.0",
     "request": "^2.48.0",
     "should": "^4.3.0",
     "socket.io": "^1.2.1"
