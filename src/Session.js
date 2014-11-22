@@ -34,7 +34,9 @@ module.exports = function({ Connection, UplinkSimpleServer }) {
 
     // Just proxy the invocation to all attached connections, which implement the same APIs.
     proxy(method) {
-      return () => { let args = arguments; return Object.keys(this.connections).map((id) => this.connections[id][method](...args)); };
+      return _.scope(function(...args) {
+        return Object.keys(this.connections).map((id) => this.connections[id][method](...args));
+      }, this);
     }
 
     attach(connection) {
