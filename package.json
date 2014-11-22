@@ -28,15 +28,15 @@
     "jshint-stylish": "^1.0.0"
   },
   "dependencies": {
-    "6to5": "^1.12.18",
+    "6to5": "^1.13.0",
     "bluebird": "^2.3.11",
-    "body-parser": "^1.9.2",
-    "co": "^3.1.0",
-    "http-exceptions": "^0.3.1",
-    "lodash-next": "^1.6.1",
-    "nexus-router": "^0.1.2",
+    "body-parser": "^1.9.3",
+    "co": "^4.0.0",
+    "http-exceptions": "^0.4.0",
+    "lodash-next": "^1.7.0",
+    "nexus-router": "^0.1.4",
     "request": "^2.48.0",
-    "should": "^4.2.1",
-    "socket.io": "^1.2.0"
+    "should": "^4.3.0",
+    "socket.io": "^1.2.1"
   }
 }
