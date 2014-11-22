@@ -55,12 +55,7 @@ module.exports = function({ UplinkSimpleServer }) {
           return ioHandlers[event].call(this, params) // only 1 synthetic 'params' object should be enough
                                                       // and it avoid reading from arguments.
           .catch((e) => {
-            let stack = null;
-            let err = e.toString();
-            if(__DEV__) {
-              stack = e.stack;
-            }
-            this.err({ err, event, params, stack });
+            this.err({ err: e.toString(), event, params, stack: __DEV__ ? e.stack : null });
           });
         })
       );
