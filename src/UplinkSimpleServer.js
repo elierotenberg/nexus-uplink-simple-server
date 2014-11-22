@@ -10,7 +10,7 @@ let Connection, Session;
 const ioHandlers = {
   connection(socket) {
     _.dev(() => instanceOfSocketIO(socket).should.be.ok &&
-      this.connections[socket.id].should.not.be.ok
+      this.connections.should.not.have.property(socket.id)
     );
     this.connections[socket.id] = new Connection({ socket, uplink: this });
     socket.on('disconnect', () => ioHandlers.disconnection.call(this, socket));
@@ -21,7 +21,7 @@ const ioHandlers = {
       socket.on.should.be.a.Function &&
       socket.emit.should.be.a.Function &&
       socket.id.should.be.a.String &&
-      this.connections[socket.id].should.be.exactly(socket)
+      this.connections.should.have.property(socket.id, socket)
     );
     this.connections[socket.id].destroy();
     delete this.connections[socket.id];
@@ -173,7 +173,7 @@ class UplinkSimpleServer {
     let createdPath;
     if(this.subscribers[path]) {
       // Fail early to avoid creating leaky entry in this.subscribers
-      _.dev(() => this.subscribers[path][session.id].should.not.be.ok);
+      _.dev(() => this.subscribers[path].should.not.have.property(session.id));
       createdPath = false;
     }
     else {
@@ -190,8 +190,9 @@ class UplinkSimpleServer {
   unsubscribeFrom(path, session) {
     _.dev(() => path.should.be.a.String &&
       session.should.be.an.instanceOf(Session) &&
+      this.subscribers.should.have.property(path) &&
       this.subscribers[path].should.be.an.Object &&
-      this.subscribers[path][session.id].should.be.exactly(session)
+      this.subscribers[path].should.have.property(session.id, session)
     );
     let deletedPath = false;
     delete this.subscribers[path][session.id];
@@ -227,7 +228,7 @@ class UplinkSimpleServer {
     let createdRoom;
     if(this.listeners[room]) {
       // Fail early to avoid creating a leaky entry in this.listeners
-      _.dev(() => this.listeners[room][session.id].should.not.be.ok);
+      _.dev(() => this.listeners[room].should.not.have.property(session.id));
       createdRoom = false;
     }
     else {
@@ -244,7 +245,7 @@ class UplinkSimpleServer {
   unlistenTo(room, session) {
     _.dev(() => room.should.be.a.String &&
       session.should.be.an.instanceOf(Session) &&
-      this.listeners[room][session.id].should.be.exactly(session)
+      this.listeners[room].should.have.property(session.id, session)
     );
     let deletedRoom = false;
     delete this.listeners[room][session.id];
