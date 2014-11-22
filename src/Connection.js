@@ -6,7 +6,7 @@ module.exports = function({ UplinkSimpleServer }) {
     handshake({ guid }) {
       return Promise.try(() => {
         // shadok assert
-        (() => this.handshake.isPending().should.not.be.ok && guid.should.be.a.String)();
+        (() => this.handshake.isPending().should.be.ok && guid.should.be.a.String)();
         this.uplink.getSession(guid)
         .then((session) => {
           session.attach(this);
