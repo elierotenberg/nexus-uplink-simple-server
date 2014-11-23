@@ -84,7 +84,7 @@ class UplinkSimpleServer {
     .forEach((event) => io.on(event, (params) => {
       _.dev(() => console.warn('nexus-uplink-simple-server', '<<', event, params));
       ioHandlers[event].call(this, params);
-    });
+    }));
 
     // Fetch from store
     app.get('*',
