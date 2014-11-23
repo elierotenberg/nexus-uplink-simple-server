@@ -30,9 +30,9 @@
   "dependencies": {
     "6to5": "^1.13.10",
     "body-parser": "^1.9.3",
-    "http-exceptions": "^0.4.2",
-    "lodash-next": "^1.8.2",
-    "nexus-router": "^0.3.2",
+    "http-exceptions": "^0.4.3",
+    "lodash-next": "^1.8.3",
+    "nexus-router": "^0.3.3",
     "request": "^2.48.0",
     "socket.io": "^1.2.1"
   }
