@@ -1,9 +1,7 @@
 "use strict";
 
-require("6to5/polyfill");var Promise = require("bluebird");var __DEV__ = (process.env.NODE_ENV !== "production");
-var _ = require("lodash-next");
+var __NODE__ = !__BROWSER__;var __BROWSER__ = (typeof window === "object");var __PROD__ = !__DEV__;var __DEV__ = (process.env.NODE_ENV !== "production");var Promise = require("lodash-next").Promise;require("6to5/polyfill");var _ = require("lodash-next");
 // ducktype-check for socket.io instance
 module.exports = function (socket) {
   return _.isObject(socket) && _.isFunction(socket.on) && _.isFunction(socket.emit) && _.isString(socket.id);
 };
-//# sourceMappingURL=data:application/json;base64,eyJ2ZXJzaW9uIjozLCJzb3VyY2VzIjpbImluc3RhbmNlT2ZTb2NrZXRJTy5qcyJdLCJuYW1lcyI6W10sIm1hcHBpbmdzIjoiOztBQUFBLE9BQU8sQ0FBQyxlQUFlLENBQUMsQ0FBQyxBQUFDLElBQU0sT0FBTyxHQUFHLE9BQU8sQ0FBQyxVQUFVLENBQUMsQ0FBQyxBQUFDLElBQU0sT0FBTyxHQUFHLENBQUMsT0FBTyxDQUFDLEdBQUcsQ0FBQyxRQUFRLEtBQUssWUFBWSxDQUFDLENBQUM7QUFDdkgsSUFBTSxDQUFDLEdBQUcsT0FBTyxDQUFDLGFBQWEsQ0FBQyxDQUFDOztBQUVqQyxNQUFNLENBQUMsT0FBTyxHQUFHLFVBQUMsTUFBTTtTQUN0QixDQUFDLENBQUMsUUFBUSxDQUFDLE1BQU0sQ0FBQyxJQUNsQixDQUFDLENBQUMsVUFBVSxDQUFDLE1BQU0sQ0FBQyxFQUFFLENBQUMsSUFDdkIsQ0FBQyxDQUFDLFVBQVUsQ0FBQyxNQUFNLENBQUMsSUFBSSxDQUFDLElBQ3pCLENBQUMsQ0FBQyxRQUFRLENBQUMsTUFBTSxDQUFDLEVBQUUsQ0FBQztDQUFBLENBQ3RCIiwiZmlsZSI6Imluc3RhbmNlT2ZTb2NrZXRJTy5qcyIsInNvdXJjZXNDb250ZW50IjpbImNvbnN0IF8gPSByZXF1aXJlKCdsb2Rhc2gtbmV4dCcpO1xyXG4vLyBkdWNrdHlwZS1jaGVjayBmb3Igc29ja2V0LmlvIGluc3RhbmNlXHJcbm1vZHVsZS5leHBvcnRzID0gKHNvY2tldCkgPT5cclxuICBfLmlzT2JqZWN0KHNvY2tldCkgJiZcclxuICBfLmlzRnVuY3Rpb24oc29ja2V0Lm9uKSAmJlxyXG4gIF8uaXNGdW5jdGlvbihzb2NrZXQuZW1pdCkgJiZcclxuICBfLmlzU3RyaW5nKHNvY2tldC5pZClcclxuO1xyXG4iXSwic291cmNlUm9vdCI6Ii9zb3VyY2UvIn0=
