@@ -18,7 +18,7 @@ var ioHandlers = {
   connection: function (socket) {
     var _this = this;
     _.dev(function () {
-      return instanceOfSocketIO(socket).should.be.ok && _this.connections.should.not.have.property(socket.id);
+      return instanceOfSocketIO(socket).should.be.ok && (_this.connections[socket.id] === void 0).should.be.ok;
     });
     this.connections[socket.id] = new Connection({ socket: socket, uplink: this });
     socket.on("disconnect", function () {
@@ -29,12 +29,17 @@ var ioHandlers = {
   disconnection: function (socket) {
     var _this2 = this;
     _.dev(function () {
-      return socket.should.be.an.Object && socket.on.should.be.a.Function && socket.emit.should.be.a.Function && socket.id.should.be.a.String && _this2.connections.should.have.property(socket.id, socket);
+      return socket.should.be.an.Object && socket.on.should.be.a.Function && socket.emit.should.be.a.Function && socket.id.should.be.a.String && (_this2.connections[socket.id] !== void 0).should.be.ok && _this2.connections[socket.id].should.be.exactly(socket);
     });
     this.connections[socket.id].destroy();
     delete this.connections[socket.id];
   } };
 
+// Most public methods expose an async API
+// to enforce consistence with async data backends,
+// eg. redis or mysql, although in this implementation
+// the backend resides in memory (a simple Object acting
+// as an associative map).
 var UplinkSimpleServer = (function () {
   var UplinkSimpleServer =
   // stores, rooms, and actions are three whitelists of
@@ -227,7 +232,7 @@ var UplinkSimpleServer = (function () {
         if (this.subscribers[path]) {
           // Fail early to avoid creating leaky entry in this.subscribers
           _.dev(function () {
-            return _this6.subscribers[path].should.not.have.property(session.id);
+            return (_this6.subscribers[path][session.id] === void 0).should.be.ok;
           });
           createdPath = false;
         } else {
@@ -246,7 +251,7 @@ var UplinkSimpleServer = (function () {
       value: function (path, session) {
         var _this7 = this;
         _.dev(function () {
-          return path.should.be.a.String && session.should.be.an.instanceOf(Session) && _this7.subscribers.should.have.property(path) && _this7.subscribers[path].should.be.an.Object && _this7.subscribers[path].should.have.property(session.id, session);
+          return path.should.be.a.String && session.should.be.an.instanceOf(Session) && (_this7.subscribers[path] !== void 0).should.be.ok && _this7.subscribers[path].should.be.an.Object && (_this7.subscribers[path][session.id] !== void 0).should.be.ok && _this7.subscribers[path][session.id].should.be.exactly(session);
         });
         var deletedPath = false;
         delete this.subscribers[path][session.id];
@@ -300,7 +305,7 @@ var UplinkSimpleServer = (function () {
         if (this.listeners[room]) {
           // Fail early to avoid creating a leaky entry in this.listeners
           _.dev(function () {
-            return _this9.listeners[room].should.not.have.property(session.id);
+            return (_this9.listeners[room][session.id] === void 0).should.be.ok;
           });
           createdRoom = false;
         } else {
@@ -319,7 +324,7 @@ var UplinkSimpleServer = (function () {
       value: function (room, session) {
         var _this10 = this;
         _.dev(function () {
-          return room.should.be.a.String && session.should.be.an.instanceOf(Session) && _this10.listeners[room].should.have.property(session.id, session);
+          return room.should.be.a.String && session.should.be.an.instanceOf(Session) && (_this10.listeners[room] !== void 0).should.be.ok && _this10.listeners[room].should.be.exactly(session);
         });
         var deletedRoom = false;
         delete this.listeners[room][session.id];

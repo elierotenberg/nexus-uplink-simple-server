@@ -41,7 +41,7 @@ module.exports = function({ Connection, UplinkSimpleServer }) {
 
     attach(connection) {
       _.dev(() => connection.should.be.an.instanceOf(Connection) &&
-        this.connections.should.not.have.property(connection.id)
+        (this.connections[connection.id] === void 0).should.be.ok
       );
       this.connections[connection.id] = connection;
       // If the session was paused (no connec attached)
@@ -74,7 +74,8 @@ module.exports = function({ Connection, UplinkSimpleServer }) {
 
     detach(connection) {
       _.dev(() => connection.should.be.an.instanceOf(Connection) &&
-        this.connections.should.have.property(connection.id, connection)
+        (this.connections[connection.id] !== void 0).should.be.ok &&
+        this.connections[connection.id].should.be.exactly(connection)
       );
       this.connections[connection.id].detach();
       delete this.connections[connection.id];
@@ -91,7 +92,7 @@ module.exports = function({ Connection, UplinkSimpleServer }) {
 
     subscribeTo(path) {
       _.dev(() => path.should.be.a.String &&
-        this.subscriptions.should.not.have.property(path)
+        (this.subscriptions[path] === void 0).should.be.ok
       );
       this.subscriptions[path] = true;
       return this.uplink.subscribeTo(path, this);
@@ -99,7 +100,7 @@ module.exports = function({ Connection, UplinkSimpleServer }) {
 
     unsubscribeFrom(path) {
       _.dev(() => path.should.be.a.String &&
-        this.subscriptions.should.have.property(path)
+        (this.subscriptions[path] !== void 0).should.be.ok
       );
       delete this.subscriptions[path];
       return this.uplink.unsubscribeFrom(path, this);
@@ -111,7 +112,7 @@ module.exports = function({ Connection, UplinkSimpleServer }) {
 
     listenTo(room) {
       _.dev(() => room.should.be.a.String &&
-        this.listeners.should.not.have.property(room)
+        (this.listeners[room] === void 0).should.be.ok
       );
       this.listeners[room] = true;
       return this.uplink.listenTo(room, this);
@@ -119,7 +120,7 @@ module.exports = function({ Connection, UplinkSimpleServer }) {
 
     unlistenFrom(room) {
       _.dev(() => room.should.be.a.String &&
-        this.listeners.should.have.property(room)
+        (this.listeners[room] !== void 0).should.be.ok
       );
       delete this.listeners[room];
       return this.uplink.unlistenFrom(room, this);

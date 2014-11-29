@@ -1,14 +1,6 @@
 "use strict";
 
-var _argumentsToArray = function (args) {
-  var target = new Array(args.length);
-  for (var i = 0; i < args.length; i++) {
-    target[i] = args[i];
-  }
-
-  return target;
-};
-
+var _slice = Array.prototype.slice;
 var _toArray = function (arr) {
   return Array.isArray(arr) ? arr : Array.from(arr);
 };
@@ -211,7 +203,7 @@ require("6to5/polyfill");var Promise = require("lodash-next").Promise;var __DEV_
       debug: {
         writable: true,
         value: function () {
-          var args = _argumentsToArray(arguments);
+          var args = _slice.call(arguments);
 
           this.push.apply(this, ["debug"].concat(_toArray(args)));
         }
@@ -219,7 +211,7 @@ require("6to5/polyfill");var Promise = require("lodash-next").Promise;var __DEV_
       log: {
         writable: true,
         value: function () {
-          var args = _argumentsToArray(arguments);
+          var args = _slice.call(arguments);
 
           this.push.apply(this, ["log"].concat(_toArray(args)));
         }
@@ -227,7 +219,7 @@ require("6to5/polyfill");var Promise = require("lodash-next").Promise;var __DEV_
       warn: {
         writable: true,
         value: function () {
-          var args = _argumentsToArray(arguments);
+          var args = _slice.call(arguments);
 
           this.push.apply(this, ["warn"].concat(_toArray(args)));
         }
@@ -235,7 +227,7 @@ require("6to5/polyfill");var Promise = require("lodash-next").Promise;var __DEV_
       err: {
         writable: true,
         value: function () {
-          var args = _argumentsToArray(arguments);
+          var args = _slice.call(arguments);
 
           this.push.apply(this, ["err"].concat(_toArray(args)));
         }

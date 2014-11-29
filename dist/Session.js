@@ -1,14 +1,6 @@
 "use strict";
 
-var _argumentsToArray = function (args) {
-  var target = new Array(args.length);
-  for (var i = 0; i < args.length; i++) {
-    target[i] = args[i];
-  }
-
-  return target;
-};
-
+var _slice = Array.prototype.slice;
 var _toArray = function (arr) {
   return Array.isArray(arr) ? arr : Array.from(arr);
 };
@@ -75,7 +67,7 @@ require("6to5/polyfill");var Promise = require("lodash-next").Promise;var __DEV_
         value: function (method) {
           return _.scope(function () {
             var _this2 = this;
-            var args = _argumentsToArray(arguments);
+            var args = _slice.call(arguments);
 
             return Object.keys(this.connections).map(function (id) {
               return _this2.connections[id][method].apply(_this2.connections[id], _toArray(args));
@@ -88,7 +80,7 @@ require("6to5/polyfill");var Promise = require("lodash-next").Promise;var __DEV_
         value: function (connection) {
           var _this3 = this;
           _.dev(function () {
-            return connection.should.be.an.instanceOf(Connection) && _this3.connections.should.not.have.property(connection.id);
+            return connection.should.be.an.instanceOf(Connection) && (_this3.connections[connection.id] === void 0).should.be.ok;
           });
           this.connections[connection.id] = connection;
           // If the session was paused (no connec attached)
@@ -137,7 +129,7 @@ require("6to5/polyfill");var Promise = require("lodash-next").Promise;var __DEV_
         value: function (connection) {
           var _this6 = this;
           _.dev(function () {
-            return connection.should.be.an.instanceOf(Connection) && _this6.connections.should.have.property(connection.id, connection);
+            return connection.should.be.an.instanceOf(Connection) && (_this6.connections[connection.id] !== void 0).should.be.ok && _this6.connections[connection.id].should.be.exactly(connection);
           });
           this.connections[connection.id].detach();
           delete this.connections[connection.id];
@@ -163,7 +155,7 @@ require("6to5/polyfill");var Promise = require("lodash-next").Promise;var __DEV_
         value: function (path) {
           var _this7 = this;
           _.dev(function () {
-            return path.should.be.a.String && _this7.subscriptions.should.not.have.property(path);
+            return path.should.be.a.String && (_this7.subscriptions[path] === void 0).should.be.ok;
           });
           this.subscriptions[path] = true;
           return this.uplink.subscribeTo(path, this);
@@ -174,7 +166,7 @@ require("6to5/polyfill");var Promise = require("lodash-next").Promise;var __DEV_
         value: function (path) {
           var _this8 = this;
           _.dev(function () {
-            return path.should.be.a.String && _this8.subscriptions.should.have.property(path);
+            return path.should.be.a.String && (_this8.subscriptions[path] !== void 0).should.be.ok;
           });
           delete this.subscriptions[path];
           return this.uplink.unsubscribeFrom(path, this);
@@ -193,7 +185,7 @@ require("6to5/polyfill");var Promise = require("lodash-next").Promise;var __DEV_
         value: function (room) {
           var _this9 = this;
           _.dev(function () {
-            return room.should.be.a.String && _this9.listeners.should.not.have.property(room);
+            return room.should.be.a.String && (_this9.listeners[room] === void 0).should.be.ok;
           });
           this.listeners[room] = true;
           return this.uplink.listenTo(room, this);
@@ -204,7 +196,7 @@ require("6to5/polyfill");var Promise = require("lodash-next").Promise;var __DEV_
         value: function (room) {
           var _this10 = this;
           _.dev(function () {
-            return room.should.be.a.String && _this10.listeners.should.have.property(room);
+            return room.should.be.a.String && (_this10.listeners[room] !== void 0).should.be.ok;
           });
           delete this.listeners[room];
           return this.uplink.unlistenFrom(room, this);
@@ -213,7 +205,7 @@ require("6to5/polyfill");var Promise = require("lodash-next").Promise;var __DEV_
       debug: {
         writable: true,
         value: function () {
-          var args = _argumentsToArray(arguments);
+          var args = _slice.call(arguments);
 
           return this.proxy("debug").apply(null, _toArray(args));
         }
@@ -221,7 +213,7 @@ require("6to5/polyfill");var Promise = require("lodash-next").Promise;var __DEV_
       log: {
         writable: true,
         value: function () {
-          var args = _argumentsToArray(arguments);
+          var args = _slice.call(arguments);
 
           return this.proxy("log").apply(null, _toArray(args));
         }
@@ -229,7 +221,7 @@ require("6to5/polyfill");var Promise = require("lodash-next").Promise;var __DEV_
       warn: {
         writable: true,
         value: function () {
-          var args = _argumentsToArray(arguments);
+          var args = _slice.call(arguments);
 
           return this.proxy("warn").apply(null, _toArray(args));
         }
@@ -237,7 +229,7 @@ require("6to5/polyfill");var Promise = require("lodash-next").Promise;var __DEV_
       err: {
         writable: true,
         value: function () {
-          var args = _argumentsToArray(arguments);
+          var args = _slice.call(arguments);
 
           return this.proxy("err").apply(null, _toArray(args));
         }
