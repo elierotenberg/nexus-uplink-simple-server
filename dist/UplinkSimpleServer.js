@@ -5,7 +5,7 @@ var _classProps = function (child, staticProps, instanceProps) {
   if (instanceProps) Object.defineProperties(child.prototype, instanceProps);
 };
 
-require("6to5/polyfill");var Promise = require("lodash-next").Promise;var __DEV__ = (process.env.NODE_ENV !== "production");var __PROD__ = !__DEV__;var __BROWSER__ = (typeof window === "object");var __NODE__ = !__BROWSER__;var _ = require("lodash-next");
+require("6to5/polyfill");var Promise = (global || window).Promise = require("lodash-next").Promise;var __DEV__ = (process.env.NODE_ENV !== "production");var __PROD__ = !__DEV__;var __BROWSER__ = (typeof window === "object");var __NODE__ = !__BROWSER__;var _ = require("lodash-next");
 var bodyParser = require("body-parser");
 var ConstantRouter = require("nexus-router").ConstantRouter;
 var HTTPExceptions = require("http-exceptions");
@@ -59,9 +59,14 @@ var UplinkSimpleServer = (function () {
     this.pid = pid;
     // Here we use ConstantRouter instances; we only need
     // to know if a given string match a registered pattern.
-    this.stores = new ConstantRouter(stores);
-    this.rooms = new ConstantRouter(rooms);
-    this.actions = new ConstantRouter(actions);
+    var createConstantRouter = function (t) {
+      return new ConstantRouter(_.object(t.map(function (v) {
+        return [v, v];
+      })));
+    };
+    this.stores = createConstantRouter(stores);
+    this.rooms = createConstantRouter(rooms);
+    this.actions = createConstantRouter(actions);
     this.app = app;
     this.server = http.Server(app);
 

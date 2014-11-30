@@ -50,9 +50,10 @@ class UplinkSimpleServer {
     this.pid = pid;
     // Here we use ConstantRouter instances; we only need
     // to know if a given string match a registered pattern.
-    this.stores = new ConstantRouter(stores);
-    this.rooms = new ConstantRouter(rooms);
-    this.actions = new ConstantRouter(actions);
+    const createConstantRouter = (t) => new ConstantRouter(_.object(t.map((v) => [v, v])));
+    this.stores = createConstantRouter(stores);
+    this.rooms = createConstantRouter(rooms);
+    this.actions = createConstantRouter(actions);
     this.app = app;
     this.server = http.Server(app);
 
