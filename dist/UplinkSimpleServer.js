@@ -130,12 +130,18 @@ var UplinkSimpleServer = (function () {
               res.status(200).type("application/json").send(value);
             })["catch"](function (e) {
               _.dev(function () {
-                return console.warn("GET " + req.path, e);
+                return console.warn("GET " + req.path, e, e.stack);
               });
               if (e instanceof HTTPExceptions.HTTPError) {
                 HTTPExceptions.forward(res, e);
               } else {
-                res.status(500).json({ err: e.toString() });
+                (function () {
+                  var json = { err: e.toString() };
+                  _.dev(function () {
+                    return json.stack = e.stack;
+                  });
+                  res.status(500).json(json);
+                })();
               }
             });
           });
@@ -191,45 +197,65 @@ var UplinkSimpleServer = (function () {
         });
       }
     },
-    update: {
+    push: {
       writable: true,
       value: regeneratorRuntime.mark(function _callee(path, value) {
         var _this5 = this;
-        var hash, diff;
         return regeneratorRuntime.wrap(function _callee$(_context) {
           while (true) switch (_context.prev = _context.next) {
-            case 0: // jshint ignore:line
-              _.dev(function () {
-                return path.should.be.a.String && value.should.be.an.Object && (_this5.stores.match(path) !== null).should.be.ok;
-              });
-              if (!_this5.subscribers[path]) {
-                _context.next = 5;
-                break;
-              }
-              // Diff and JSON-encode as early as possible to avoid duplicating
-              // these lengthy calculations down the propagation tree.
-              // If no value was present before, then nullify the hash. No value has a null hash.
-              if (!_this5._data[path]) {
-                hash = null;
-              } else {
-                hash = _.hash(_this5._data[path]);
-                diff = _.diff(_this5._data[path], value);
-              }
-              _context.next = 5;
-              return Object.keys(_this5.subscribers[path]) // jshint ignore:line
-              .map(function (session) {
-                return session.update(path, { hash: hash, diff: diff });
-              });
-            case 5:
+            case 0: _context.next = 2;
+              return _this5.update(path, value);
+            case 2: return _context.abrupt("return", _context.sent);
+            case 3:
             case "end": return _context.stop();
           }
         }, _callee, this);
       })
     },
+    update: {
+      writable: true,
+      value: regeneratorRuntime.mark(function _callee2(path, value) {
+        var _this6 = this;
+        var hash, diff;
+        return regeneratorRuntime.wrap(function _callee2$(_context2) {
+          while (true) switch (_context2.prev = _context2.next) {
+            case 0: // jshint ignore:line
+              _.dev(function () {
+                return path.should.be.a.String && value.should.be.an.Object && (_this6.stores.match(path) !== null).should.be.ok;
+              });
+              if (!_this6.subscribers[path]) {
+                _context2.next = 8;
+                break;
+              }
+              // Diff and JSON-encode as early as possible to avoid duplicating
+              // these lengthy calculations down the propagation tree.
+              // If no value was present before, then nullify the hash. No value has a null hash.
+              if (!_this6._data[path]) {
+                hash = null;
+              } else {
+                hash = _.hash(_this6._data[path]);
+                diff = _.diff(_this6._data[path], value);
+              }
+              _this6._data[path] = value;
+              _context2.next = 6;
+              return Object.keys(_this6.subscribers[path]) // jshint ignore:line
+              .map(function (session) {
+                return session.update(path, { hash: hash, diff: diff });
+              });
+            case 6: _context2.next = 9;
+              break;
+            case 8:
+              _this6._data[path] = value;
+            case 9:
+            case "end": return _context2.stop();
+          }
+        }, _callee2, this);
+      })
+    },
     subscribeTo: {
       writable: true,
       value: function (path, session) {
-        var _this6 = this;
+        var _this7 = this;
         _.dev(function () {
           return path.should.be.a.String && session.should.be.an.instanceOf(Session);
         });
@@ -237,7 +263,7 @@ var UplinkSimpleServer = (function () {
         if (this.subscribers[path]) {
           // Fail early to avoid creating leaky entry in this.subscribers
           _.dev(function () {
-            return (_this6.subscribers[path][session.id] === void 0).should.be.ok;
+            return (_this7.subscribers[path][session.id] === void 0).should.be.ok;
           });
           createdPath = false;
         } else {
@@ -254,9 +280,9 @@ var UplinkSimpleServer = (function () {
     unsubscribeFrom: {
       writable: true,
       value: function (path, session) {
-        var _this7 = this;
+        var _this8 = this;
         _.dev(function () {
-          return path.should.be.a.String && session.should.be.an.instanceOf(Session) && (_this7.subscribers[path] !== void 0).should.be.ok && _this7.subscribers[path].should.be.an.Object && (_this7.subscribers[path][session.id] !== void 0).should.be.ok && _this7.subscribers[path][session.id].should.be.exactly(session);
+          return path.should.be.a.String && session.should.be.an.instanceOf(Session) && (_this8.subscribers[path] !== void 0).should.be.ok && _this8.subscribers[path].should.be.an.Object && (_this8.subscribers[path][session.id] !== void 0).should.be.ok && _this8.subscribers[path][session.id].should.be.exactly(session);
         });
         var deletedPath = false;
         delete this.subscribers[path][session.id];
@@ -272,37 +298,37 @@ var UplinkSimpleServer = (function () {
     },
     emit: {
       writable: true,
-      value: regeneratorRuntime.mark(function _callee2(room, params) {
-        var _this8 = this;
+      value: regeneratorRuntime.mark(function _callee3(room, params) {
+        var _this9 = this;
         var json;
-        return regeneratorRuntime.wrap(function _callee2$(_context2) {
-          while (true) switch (_context2.prev = _context2.next) {
+        return regeneratorRuntime.wrap(function _callee3$(_context3) {
+          while (true) switch (_context3.prev = _context3.next) {
             case 0: // jshint ignore:line
               _.dev(function () {
-                return room.should.be.a.String && params.should.be.an.Object && (_this8.rooms.match(room) !== null).should.be.ok;
+                return room.should.be.a.String && params.should.be.an.Object && (_this9.rooms.match(room) !== null).should.be.ok;
               });
-              if (!_this8.listeners[room]) {
-                _context2.next = 5;
+              if (!_this9.listeners[room]) {
+                _context3.next = 5;
                 break;
               }
               // Encode as early as possible to avoid duplicating
               // this operation down the propagation tree.
               json = _.prollystringify(params);
-              _context2.next = 5;
-              return Object.keys(_this8.listeners[room]) // jshint ignore:line
+              _context3.next = 5;
+              return Object.keys(_this9.listeners[room]) // jshint ignore:line
               .map(function (session) {
                 return session.emit(room, json);
               });
             case 5:
-            case "end": return _context2.stop();
+            case "end": return _context3.stop();
           }
-        }, _callee2, this);
+        }, _callee3, this);
       })
     },
     listenTo: {
       writable: true,
       value: function (room, session) {
-        var _this9 = this;
+        var _this10 = this;
         _.dev(function () {
           return room.should.be.a.String && session.should.be.an.instanceOf(Session);
         });
@@ -310,7 +336,7 @@ var UplinkSimpleServer = (function () {
         if (this.listeners[room]) {
           // Fail early to avoid creating a leaky entry in this.listeners
           _.dev(function () {
-            return (_this9.listeners[room][session.id] === void 0).should.be.ok;
+            return (_this10.listeners[room][session.id] === void 0).should.be.ok;
           });
           createdRoom = false;
         } else {
@@ -327,9 +353,9 @@ var UplinkSimpleServer = (function () {
     unlistenTo: {
       writable: true,
       value: function (room, session) {
-        var _this10 = this;
+        var _this11 = this;
         _.dev(function () {
-          return room.should.be.a.String && session.should.be.an.instanceOf(Session) && (_this10.listeners[room] !== void 0).should.be.ok && _this10.listeners[room].should.be.exactly(session);
+          return room.should.be.a.String && session.should.be.an.instanceOf(Session) && (_this11.listeners[room] !== void 0).should.be.ok && _this11.listeners[room].should.be.exactly(session);
         });
         var deletedRoom = false;
         delete this.listeners[room][session.id];
@@ -346,9 +372,9 @@ var UplinkSimpleServer = (function () {
     addActionHandler: {
       writable: true,
       value: function (action, handler) {
-        var _this11 = this;
+        var _this12 = this;
         _.dev(function () {
-          return action.should.be.a.String && handler.should.be.a.Function && (_this11.actions.match(action) !== null).should.be.ok;
+          return action.should.be.a.String && handler.should.be.a.Function && (_this12.actions.match(action) !== null).should.be.ok;
         });
         var createdAction = false;
         if (!this.actions[action]) {
@@ -362,9 +388,9 @@ var UplinkSimpleServer = (function () {
     removeActionHandler: {
       writable: true,
       value: function (action, handler) {
-        var _this12 = this;
+        var _this13 = this;
         _.dev(function () {
-          return action.should.be.a.String && handler.should.be.a.Function && _this12.actions[action].should.be.an.Array && _.contains(_this12.actions[action], handler).should.be.ok;
+          return action.should.be.a.String && handler.should.be.a.Function && _this13.actions[action].should.be.an.Array && _.contains(_this13.actions[action], handler).should.be.ok;
         });
         // Loop through the list of handlers here;
         // We don't expect to have _that_ much different handlers
@@ -381,26 +407,26 @@ var UplinkSimpleServer = (function () {
     },
     dispatch: {
       writable: true,
-      value: regeneratorRuntime.mark(function _callee3(action, params) {
-        var _this13 = this;
-        return regeneratorRuntime.wrap(function _callee3$(_context3) {
-          while (true) switch (_context3.prev = _context3.next) {
+      value: regeneratorRuntime.mark(function _callee4(action, params) {
+        var _this14 = this;
+        return regeneratorRuntime.wrap(function _callee4$(_context4) {
+          while (true) switch (_context4.prev = _context4.next) {
             case 0:
               if (params === undefined) params = {};
               // jshint ignore:line
               _.dev(function () {
-                return action.should.be.a.String && params.should.be.an.Object && params.guid.should.be.a.String && (_this13.actions[action].match(action) !== null).should.be.ok;
+                return action.should.be.a.String && params.should.be.an.Object && params.guid.should.be.a.String && (_this14.actions[action].match(action) !== null).should.be.ok;
               });
-              _context3.next = 4;
-              return (_this13.actionHandlers[action] ? _this13.actionHandlers[action] : []) // jshint ignore:line
+              _context4.next = 4;
+              return (_this14.actionHandlers[action] ? _this14.actionHandlers[action] : []) // jshint ignore:line
               .map(function (handler) {
                 return handler.call(null, params);
               });
-            case 4: return _context3.abrupt("return", _context3.sent);
+            case 4: return _context4.abrupt("return", _context4.sent);
             case 5:
-            case "end": return _context3.stop();
+            case "end": return _context4.stop();
           }
-        }, _callee3, this);
+        }, _callee4, this);
       })
     },
     hasSession: {

@@ -99,12 +99,14 @@ class UplinkSimpleServer {
           res.status(200).type('application/json').send(value);
         })
         .catch((e) => {
-          _.dev(() => console.warn(`GET ${req.path}`, e));
+          _.dev(() => console.warn(`GET ${req.path}`, e, e.stack));
           if(e instanceof HTTPExceptions.HTTPError) {
             HTTPExceptions.forward(res, e);
           }
           else {
-            res.status(500).json({ err: e.toString() });
+            let json = { err: e.toString() };
+            _.dev(() => json.stack = e.stack);
+            res.status(500).json(json);
           }
         })
     );
@@ -148,13 +150,17 @@ class UplinkSimpleServer {
     });
   }
 
+  *push(path, value) { // jshint ignore:line
+    return yield this.update(path, value); // jshint ignore:line
+  }
+
   *update(path, value) { // jshint ignore:line
     _.dev(() => path.should.be.a.String &&
       value.should.be.an.Object &&
       (this.stores.match(path) !== null).should.be.ok
     );
-    let hash, diff;
     if(this.subscribers[path]) {
+      let hash, diff;
       // Diff and JSON-encode as early as possible to avoid duplicating
       // these lengthy calculations down the propagation tree.
       // If no value was present before, then nullify the hash. No value has a null hash.
@@ -165,11 +171,15 @@ class UplinkSimpleServer {
         hash = _.hash(this._data[path]);
         diff = _.diff(this._data[path], value);
       }
+      this._data[path] = value;
       // Directly pass the patch, sessions don't need to be aware
       // of the actual contents; they only need to forward the diff
       // to their associated clients.
       yield Object.keys(this.subscribers[path]) // jshint ignore:line
       .map((session) => session.update(path, { hash, diff }));
+    }
+    else {
+      this._data[path] = value;
     }
   }
 
