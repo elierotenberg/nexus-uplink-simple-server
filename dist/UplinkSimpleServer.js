@@ -108,7 +108,7 @@ var UplinkSimpleServer = (function () {
           Object.keys(ioHandlers).forEach(function (event) {
             return io.on(event, function (params) {
               _.dev(function () {
-                return console.warn("nexus-uplink-simple-server", "<<", event, params);
+                return console.warn("nexus-uplink-simple-server", "<<", event);
               });
               ioHandlers[event].call(_this3, params);
             });

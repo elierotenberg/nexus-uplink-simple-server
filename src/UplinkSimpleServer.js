@@ -85,7 +85,7 @@ class UplinkSimpleServer {
     // Delegate to static ioHandler methods, but call them with context.
     Object.keys(ioHandlers)
     .forEach((event) => io.on(event, (params) => {
-      _.dev(() => console.warn('nexus-uplink-simple-server', '<<', event, params));
+      _.dev(() => console.warn('nexus-uplink-simple-server', '<<', event));
       ioHandlers[event].call(this, params);
     }));
 
