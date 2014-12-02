@@ -29,7 +29,7 @@ var ioHandlers = {
   disconnection: function (socket) {
     var _this2 = this;
     _.dev(function () {
-      return socket.should.be.an.Object && socket.on.should.be.a.Function && socket.emit.should.be.a.Function && socket.id.should.be.a.String && (_this2.connections[socket.id] !== void 0).should.be.ok && _this2.connections[socket.id].should.be.exactly(socket);
+      return socket.should.be.an.Object && socket.on.should.be.a.Function && socket.emit.should.be.a.Function && socket.id.should.be.a.String && (_this2.connections[socket.id] !== void 0).should.be.ok && _this2.connections[socket.id].socketIs(socket).should.be.ok;
     });
     this.connections[socket.id].destroy();
     delete this.connections[socket.id];

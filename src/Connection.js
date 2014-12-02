@@ -58,6 +58,10 @@ module.exports = function({ UplinkSimpleServer }) {
       return this.socket.id;
     }
 
+    socketId(socket) {
+      return socket === this.socket;
+    }
+
     push(event, params) {
       _.dev(() => event.should.be.a.String);
       _.dev(() => console.warn('nexus-uplink-simple-server', '>>', event, params));
