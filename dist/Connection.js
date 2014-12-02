@@ -144,12 +144,6 @@ require("6to5/polyfill");var Promise = (global || window).Promise = require("lod
           return this.socket.id;
         }
       },
-      socketId: {
-        writable: true,
-        value: function (socket) {
-          return socket === this.socket;
-        }
-      },
       push: {
         writable: true,
         value: function (event, params) {

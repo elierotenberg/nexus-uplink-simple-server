@@ -22,7 +22,8 @@ const ioHandlers = {
       socket.emit.should.be.a.Function &&
       socket.id.should.be.a.String &&
       (this.connections[socket.id] !== void 0).should.be.ok &&
-      this.connections[socket.id].socketIs(socket).should.be.ok
+      (this.connections[socket.id].socket !== void 0).should.be.ok &&
+      this.connections[socket.id].socket.should.be.exactly(socket)
     );
     this.connections[socket.id].destroy();
     delete this.connections[socket.id];
