@@ -177,7 +177,7 @@ class UplinkSimpleServer {
       // of the actual contents; they only need to forward the diff
       // to their associated clients.
       yield Object.keys(this.subscribers[path]) // jshint ignore:line
-      .map((session) => session.update(path, { hash, diff }));
+      .map((k) => this.subscribers[path][k].update(path, { hash, diff }));
     }
     else {
       this._data[path] = value;
@@ -236,7 +236,7 @@ class UplinkSimpleServer {
       // this operation down the propagation tree.
       json = _.prollystringify(params);
       yield Object.keys(this.listeners[room]) // jshint ignore:line
-      .map((session) => session.emit(room, json));
+      .map((k) => this.listeners[room][k].emit(room, json));
     }
   }
 

@@ -85,6 +85,7 @@ module.exports = function({ Connection, UplinkSimpleServer }) {
       }
       return this;
     }
+
     update({ path, diff, hash }) {
       return this.proxy('update')({ path, diff, hash });
     }

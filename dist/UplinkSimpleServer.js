@@ -224,8 +224,8 @@ var UplinkSimpleServer = (function () {
           _this6._data[path] = value;
           _context2.next = 6;
           return Object.keys(_this6.subscribers[path]) // jshint ignore:line
-          .map(function (session) {
-            return session.update(path, { hash: hash, diff: diff });
+          .map(function (k) {
+            return _this6.subscribers[path][k].update(path, { hash: hash, diff: diff });
           });
         case 6: _context2.next = 9;
           break;
@@ -294,8 +294,8 @@ var UplinkSimpleServer = (function () {
           json = _.prollystringify(params);
           _context3.next = 5;
           return Object.keys(_this9.listeners[room]) // jshint ignore:line
-          .map(function (session) {
-            return session.emit(room, json);
+          .map(function (k) {
+            return _this9.listeners[room][k].emit(room, json);
           });
         case 5:
         case "end": return _context3.stop();
