@@ -17,8 +17,8 @@ require("6to5/polyfill");var Promise = (global || window).Promise = require("lod
 
   var EXPIRE_TIMEOUT = 30000;
 
-  var _Session = (function () {
-    var _Session = function _Session(_ref2) {
+  var Session = (function () {
+    var Session = function Session(_ref2) {
       var guid = _ref2.guid;
       var uplink = _ref2.uplink;
       _.dev(function () {
@@ -35,211 +35,174 @@ require("6to5/polyfill");var Promise = (global || window).Promise = require("lod
       this.pause();
     };
 
-    _classProps(_Session, null, {
-      destroy: {
-        writable: true,
-        value: function () {
-          var _this = this;
-          if (this.timeout !== null) {
-            clearTimeout(this.timeout);
-          }
-          Object.keys(this.connections).forEach(function (id) {
-            return _this.detach(_this.connections[id]);
-          });
-          Object.keys(this.subscriptions).forEach(function (path) {
-            return _this.unsubscribeFrom(path);
-          });
-          Object.keys(this.listeners).forEach(function (room) {
-            return _this.unlistenFrom(room);
-          });
-        }
-      },
+    Session.prototype.destroy = function () {
+      var _this = this;
+      if (this.timeout !== null) {
+        clearTimeout(this.timeout);
+      }
+      Object.keys(this.connections).forEach(function (id) {
+        return _this.detach(_this.connections[id]);
+      });
+      Object.keys(this.subscriptions).forEach(function (path) {
+        return _this.unsubscribeFrom(path);
+      });
+      Object.keys(this.listeners).forEach(function (room) {
+        return _this.unlistenFrom(room);
+      });
+    };
+
+    Session.prototype.proxy = function (method) {
+      return _.scope(function () {
+        var _this2 = this;
+        var args = _slice.call(arguments);
+
+        return Object.keys(this.connections).map(function (id) {
+          return _this2.connections[id][method].apply(_this2.connections[id], _toArray(args));
+        });
+      }, this);
+    };
+
+    Session.prototype.attach = function (connection) {
+      var _this3 = this;
+      _.dev(function () {
+        return connection.should.be.an.instanceOf(Connection) && (_this3.connections[connection.id] === void 0).should.be.ok;
+      });
+      this.connections[connection.id] = connection;
+      // If the session was paused (no connec attached)
+      // then resume it
+      if (this.paused) {
+        this.resume();
+      }
+      return this;
+    };
+
+    Session.prototype.expire = function () {
+      this.expired = true;
+      return this.uplink.deleteSession(this);
+    };
+
+    Session.prototype.pause = function () {
+      var _this4 = this;
+      _.dev(function () {
+        return _this4.paused.should.not.be.ok;
+      });
+      this.timeout = setTimeout(function () {
+        return _this4.expire();
+      }, EXPIRE_TIMEOUT);
+      return this;
+    };
+
+    Session.prototype.resume = function () {
+      var _this5 = this;
+      _.dev(function () {
+        return _this5.paused.should.be.ok;
+      });
+      // Prevent the expiration timeout
+      clearTimeout(this.timeout);
+      this.timeout = null;
+      return this;
+    };
+
+    Session.prototype.detach = function (connection) {
+      var _this6 = this;
+      _.dev(function () {
+        return connection.should.be.an.instanceOf(Connection) && (_this6.connections[connection.id] !== void 0).should.be.ok && _this6.connections[connection.id].should.be.exactly(connection);
+      });
+      this.connections[connection.id].detach();
+      delete this.connections[connection.id];
+      // If this was the last connection, pause the session
+      // and start the expire countdown
+      if (Object.keys(this.connections).length === 0) {
+        this.pause();
+      }
+      return this;
+    };
+
+    Session.prototype.update = function (_ref3) {
+      var path = _ref3.path;
+      var diff = _ref3.diff;
+      var hash = _ref3.hash;
+      return this.proxy("update")({ path: path, diff: diff, hash: hash });
+    };
+
+    Session.prototype.subscribeTo = function (path) {
+      var _this7 = this;
+      _.dev(function () {
+        return path.should.be.a.String && (_this7.subscriptions[path] === void 0).should.be.ok;
+      });
+      this.subscriptions[path] = true;
+      return this.uplink.subscribeTo(path, this);
+    };
+
+    Session.prototype.unsubscribeFrom = function (path) {
+      var _this8 = this;
+      _.dev(function () {
+        return path.should.be.a.String && (_this8.subscriptions[path] !== void 0).should.be.ok;
+      });
+      delete this.subscriptions[path];
+      return this.uplink.unsubscribeFrom(path, this);
+    };
+
+    Session.prototype.emit = function (_ref4) {
+      var room = _ref4.room;
+      var params = _ref4.params;
+      return this.proxy("emit")({ room: room, params: params });
+    };
+
+    Session.prototype.listenTo = function (room) {
+      var _this9 = this;
+      _.dev(function () {
+        return room.should.be.a.String && (_this9.listeners[room] === void 0).should.be.ok;
+      });
+      this.listeners[room] = true;
+      return this.uplink.listenTo(room, this);
+    };
+
+    Session.prototype.unlistenFrom = function (room) {
+      var _this10 = this;
+      _.dev(function () {
+        return room.should.be.a.String && (_this10.listeners[room] !== void 0).should.be.ok;
+      });
+      delete this.listeners[room];
+      return this.uplink.unlistenFrom(room, this);
+    };
+
+    Session.prototype.debug = function () {
+      var args = _slice.call(arguments);
+
+      return this.proxy("debug").apply(null, _toArray(args));
+    };
+
+    Session.prototype.log = function () {
+      var args = _slice.call(arguments);
+
+      return this.proxy("log").apply(null, _toArray(args));
+    };
+
+    Session.prototype.warn = function () {
+      var args = _slice.call(arguments);
+
+      return this.proxy("warn").apply(null, _toArray(args));
+    };
+
+    Session.prototype.err = function () {
+      var args = _slice.call(arguments);
+
+      return this.proxy("err").apply(null, _toArray(args));
+    };
+
+    _classProps(Session, null, {
       paused: {
         get: function () {
           return (this.timeout !== null);
         }
-      },
-      proxy: {
-        writable: true,
-
-
-        // Just proxy the invocation to all attached connections, which implement the same APIs.
-        value: function (method) {
-          return _.scope(function () {
-            var _this2 = this;
-            var args = _slice.call(arguments);
-
-            return Object.keys(this.connections).map(function (id) {
-              return _this2.connections[id][method].apply(_this2.connections[id], _toArray(args));
-            });
-          }, this);
-        }
-      },
-      attach: {
-        writable: true,
-        value: function (connection) {
-          var _this3 = this;
-          _.dev(function () {
-            return connection.should.be.an.instanceOf(Connection) && (_this3.connections[connection.id] === void 0).should.be.ok;
-          });
-          this.connections[connection.id] = connection;
-          // If the session was paused (no connec attached)
-          // then resume it
-          if (this.paused) {
-            this.resume();
-          }
-          return this;
-        }
-      },
-      expire: {
-        writable: true,
-        value: function () {
-          this.expired = true;
-          return this.uplink.deleteSession(this);
-        }
-      },
-      pause: {
-        writable: true,
-        value: function () {
-          var _this4 = this;
-          _.dev(function () {
-            return _this4.paused.should.not.be.ok;
-          });
-          this.timeout = setTimeout(function () {
-            return _this4.expire();
-          }, EXPIRE_TIMEOUT);
-          return this;
-        }
-      },
-      resume: {
-        writable: true,
-        value: function () {
-          var _this5 = this;
-          _.dev(function () {
-            return _this5.paused.should.be.ok;
-          });
-          // Prevent the expiration timeout
-          clearTimeout(this.timeout);
-          this.timeout = null;
-          return this;
-        }
-      },
-      detach: {
-        writable: true,
-        value: function (connection) {
-          var _this6 = this;
-          _.dev(function () {
-            return connection.should.be.an.instanceOf(Connection) && (_this6.connections[connection.id] !== void 0).should.be.ok && _this6.connections[connection.id].should.be.exactly(connection);
-          });
-          this.connections[connection.id].detach();
-          delete this.connections[connection.id];
-          // If this was the last connection, pause the session
-          // and start the expire countdown
-          if (Object.keys(this.connections).length === 0) {
-            this.pause();
-          }
-          return this;
-        }
-      },
-      update: {
-        writable: true,
-        value: function (_ref3) {
-          var path = _ref3.path;
-          var diff = _ref3.diff;
-          var hash = _ref3.hash;
-          return this.proxy("update")({ path: path, diff: diff, hash: hash });
-        }
-      },
-      subscribeTo: {
-        writable: true,
-        value: function (path) {
-          var _this7 = this;
-          _.dev(function () {
-            return path.should.be.a.String && (_this7.subscriptions[path] === void 0).should.be.ok;
-          });
-          this.subscriptions[path] = true;
-          return this.uplink.subscribeTo(path, this);
-        }
-      },
-      unsubscribeFrom: {
-        writable: true,
-        value: function (path) {
-          var _this8 = this;
-          _.dev(function () {
-            return path.should.be.a.String && (_this8.subscriptions[path] !== void 0).should.be.ok;
-          });
-          delete this.subscriptions[path];
-          return this.uplink.unsubscribeFrom(path, this);
-        }
-      },
-      emit: {
-        writable: true,
-        value: function (_ref4) {
-          var room = _ref4.room;
-          var params = _ref4.params;
-          return this.proxy("emit")({ room: room, params: params });
-        }
-      },
-      listenTo: {
-        writable: true,
-        value: function (room) {
-          var _this9 = this;
-          _.dev(function () {
-            return room.should.be.a.String && (_this9.listeners[room] === void 0).should.be.ok;
-          });
-          this.listeners[room] = true;
-          return this.uplink.listenTo(room, this);
-        }
-      },
-      unlistenFrom: {
-        writable: true,
-        value: function (room) {
-          var _this10 = this;
-          _.dev(function () {
-            return room.should.be.a.String && (_this10.listeners[room] !== void 0).should.be.ok;
-          });
-          delete this.listeners[room];
-          return this.uplink.unlistenFrom(room, this);
-        }
-      },
-      debug: {
-        writable: true,
-        value: function () {
-          var args = _slice.call(arguments);
-
-          return this.proxy("debug").apply(null, _toArray(args));
-        }
-      },
-      log: {
-        writable: true,
-        value: function () {
-          var args = _slice.call(arguments);
-
-          return this.proxy("log").apply(null, _toArray(args));
-        }
-      },
-      warn: {
-        writable: true,
-        value: function () {
-          var args = _slice.call(arguments);
-
-          return this.proxy("warn").apply(null, _toArray(args));
-        }
-      },
-      err: {
-        writable: true,
-        value: function () {
-          var args = _slice.call(arguments);
-
-          return this.proxy("err").apply(null, _toArray(args));
-        }
       }
     });
 
-    return _Session;
+    return Session;
   })();
 
-  _.extend(_Session.prototype, {
+  _.extend(Session.prototype, {
     guid: null,
     uplink: null,
     connections: null,
@@ -248,5 +211,5 @@ require("6to5/polyfill");var Promise = (global || window).Promise = require("lod
     subscriptions: null,
     listeners: null });
 
-  return _Session;
+  return Session;
 };

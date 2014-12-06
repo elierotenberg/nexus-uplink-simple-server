@@ -112,8 +112,8 @@ require("6to5/polyfill");var Promise = (global || window).Promise = require("lod
       }, _callee5, this);
     }) }, _.co.wrap);
 
-  var _Connection = (function () {
-    var _Connection = function _Connection(_ref7) {
+  var Connection = (function () {
+    var Connection = function Connection(_ref7) {
       var _this6 = this;
       var socket = _ref7.socket;
       var uplink = _ref7.uplink;
@@ -138,109 +138,89 @@ require("6to5/polyfill");var Promise = (global || window).Promise = require("lod
       });
     };
 
-    _classProps(_Connection, null, {
+    Connection.prototype.push = function (event, params) {
+      _.dev(function () {
+        return event.should.be.a.String;
+      });
+      _.dev(function () {
+        return console.warn("nexus-uplink-simple-server", ">>", event, params);
+      });
+      this.socket.emit(event, params);
+    };
+
+    Connection.prototype.destroy = function () {
+      var _this7 = this;
+      if (this.handshake.isPending()) {
+        this.handshake.cancel();
+      } else {
+        this.handshake.then(function (session) {
+          return session.detach(_this7);
+        });
+      }
+      this.socket.close();
+    };
+
+    Connection.prototype.detach = function () {
+      // Improvement opportunity: allow client to re-handshake.
+      this.destroy();
+    };
+
+    Connection.prototype.handshakeAck = function (pid) {
+      this.push("handshakeAck", { pid: pid });
+    };
+
+    Connection.prototype.update = function (_ref8) {
+      var path = _ref8.path;
+      var diff = _ref8.diff;
+      var hash = _ref8.hash;
+      this.push("update", { path: path, diff: diff, hash: hash });
+    };
+
+    Connection.prototype.emit = function (_ref9) {
+      var room = _ref9.room;
+      var params = _ref9.params;
+      this.push("emit", { room: room, params: params });
+    };
+
+    Connection.prototype.debug = function () {
+      var args = _slice.call(arguments);
+
+      this.push.apply(this, ["debug"].concat(_toArray(args)));
+    };
+
+    Connection.prototype.log = function () {
+      var args = _slice.call(arguments);
+
+      this.push.apply(this, ["log"].concat(_toArray(args)));
+    };
+
+    Connection.prototype.warn = function () {
+      var args = _slice.call(arguments);
+
+      this.push.apply(this, ["warn"].concat(_toArray(args)));
+    };
+
+    Connection.prototype.err = function () {
+      var args = _slice.call(arguments);
+
+      this.push.apply(this, ["err"].concat(_toArray(args)));
+    };
+
+    _classProps(Connection, null, {
       id: {
         get: function () {
           return this.socket.id;
         }
-      },
-      push: {
-        writable: true,
-        value: function (event, params) {
-          _.dev(function () {
-            return event.should.be.a.String;
-          });
-          _.dev(function () {
-            return console.warn("nexus-uplink-simple-server", ">>", event, params);
-          });
-          this.socket.emit(event, params);
-        }
-      },
-      destroy: {
-        writable: true,
-        value: function () {
-          var _this7 = this;
-          if (this.handshake.isPending()) {
-            this.handshake.cancel();
-          } else {
-            this.handshake.then(function (session) {
-              return session.detach(_this7);
-            });
-          }
-          this.socket.close();
-        }
-      },
-      detach: {
-        writable: true,
-        value: function () {
-          // Improvement opportunity: allow client to re-handshake.
-          this.destroy();
-        }
-      },
-      handshakeAck: {
-        writable: true,
-        value: function (pid) {
-          this.push("handshakeAck", { pid: pid });
-        }
-      },
-      update: {
-        writable: true,
-        value: function (_ref8) {
-          var path = _ref8.path;
-          var diff = _ref8.diff;
-          var hash = _ref8.hash;
-          this.push("update", { path: path, diff: diff, hash: hash });
-        }
-      },
-      emit: {
-        writable: true,
-        value: function (_ref9) {
-          var room = _ref9.room;
-          var params = _ref9.params;
-          this.push("emit", { room: room, params: params });
-        }
-      },
-      debug: {
-        writable: true,
-        value: function () {
-          var args = _slice.call(arguments);
-
-          this.push.apply(this, ["debug"].concat(_toArray(args)));
-        }
-      },
-      log: {
-        writable: true,
-        value: function () {
-          var args = _slice.call(arguments);
-
-          this.push.apply(this, ["log"].concat(_toArray(args)));
-        }
-      },
-      warn: {
-        writable: true,
-        value: function () {
-          var args = _slice.call(arguments);
-
-          this.push.apply(this, ["warn"].concat(_toArray(args)));
-        }
-      },
-      err: {
-        writable: true,
-        value: function () {
-          var args = _slice.call(arguments);
-
-          this.push.apply(this, ["err"].concat(_toArray(args)));
-        }
       }
     });
 
-    return _Connection;
+    return Connection;
   })();
 
-  _.extend(_Connection.prototype, {
+  _.extend(Connection.prototype, {
     socket: null,
     handshake: null,
     _handshake: null });
 
-  return _Connection;
+  return Connection;
 };
