@@ -77,7 +77,6 @@ module.exports = function({ Connection, UplinkSimpleServer }) {
         (this.connections[connection.id] !== void 0).should.be.ok &&
         this.connections[connection.id].should.be.exactly(connection)
       );
-      this.connections[connection.id].detach();
       delete this.connections[connection.id];
       // If this was the last connection, pause the session
       // and start the expire countdown

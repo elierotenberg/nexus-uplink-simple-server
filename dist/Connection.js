@@ -120,6 +120,7 @@ require("6to5/polyfill");var Promise = (global || window).Promise = require("lod
       _.dev(function () {
         return instanceOfSocketIO(socket).should.be.ok && uplink.should.be.an.instanceOf(UplinkSimpleServer);
       });
+      this._destroyed = false;
       this.socket = socket;
       this.uplink = uplink;
       // handshake should resolve to the session this connection will be attached to
@@ -150,6 +151,10 @@ require("6to5/polyfill");var Promise = (global || window).Promise = require("lod
 
     Connection.prototype.destroy = function () {
       var _this7 = this;
+      _.dev(function () {
+        return _this7.shouldNotBeDestroyed;
+      });
+      this._destroyed = true;
       if (this.handshake.isPending()) {
         this.handshake.cancel();
       } else {
@@ -158,11 +163,6 @@ require("6to5/polyfill");var Promise = (global || window).Promise = require("lod
         });
       }
       this.socket.close();
-    };
-
-    Connection.prototype.detach = function () {
-      // Improvement opportunity: allow client to re-handshake.
-      this.destroy();
     };
 
     Connection.prototype.handshakeAck = function (pid) {
@@ -207,6 +207,11 @@ require("6to5/polyfill");var Promise = (global || window).Promise = require("lod
     };
 
     _classProps(Connection, null, {
+      shouldNotBeDestroyed: {
+        get: function () {
+          return this._destroyed.should.not.be.ok;
+        }
+      },
       id: {
         get: function () {
           return this.socket.id;
@@ -220,7 +225,8 @@ require("6to5/polyfill");var Promise = (global || window).Promise = require("lod
   _.extend(Connection.prototype, {
     socket: null,
     handshake: null,
-    _handshake: null });
+    _handshake: null,
+    _destroyed: null });
 
   return Connection;
 };

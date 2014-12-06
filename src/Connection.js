@@ -40,6 +40,7 @@ module.exports = function({ UplinkSimpleServer }) {
       _.dev(() => instanceOfSocketIO(socket).should.be.ok &&
         uplink.should.be.an.instanceOf(UplinkSimpleServer)
       );
+      this._destroyed = false;
       this.socket = socket;
       this.uplink = uplink;
       // handshake should resolve to the session this connection will be attached to
@@ -54,6 +55,10 @@ module.exports = function({ UplinkSimpleServer }) {
       );
     }
 
+    get shouldNotBeDestroyed() {
+      return this._destroyed.should.not.be.ok;
+    }
+
     get id() {
       return this.socket.id;
     }
@@ -65,6 +70,8 @@ module.exports = function({ UplinkSimpleServer }) {
     }
 
     destroy() {
+      _.dev(() => this.shouldNotBeDestroyed);
+      this._destroyed = true;
       if(this.handshake.isPending()) {
         this.handshake.cancel();
       }
@@ -73,11 +80,6 @@ module.exports = function({ UplinkSimpleServer }) {
         .then((session) => session.detach(this));
       }
       this.socket.close();
-    }
-
-    detach() {
-      // Improvement opportunity: allow client to re-handshake.
-      this.destroy();
     }
 
     handshakeAck(pid) {
@@ -113,6 +115,7 @@ module.exports = function({ UplinkSimpleServer }) {
     socket: null,
     handshake: null,
     _handshake: null,
+    _destroyed: null,
   });
 
   return Connection;

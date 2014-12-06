@@ -108,7 +108,6 @@ require("6to5/polyfill");var Promise = (global || window).Promise = require("lod
       _.dev(function () {
         return connection.should.be.an.instanceOf(Connection) && (_this6.connections[connection.id] !== void 0).should.be.ok && _this6.connections[connection.id].should.be.exactly(connection);
       });
-      this.connections[connection.id].detach();
       delete this.connections[connection.id];
       // If this was the last connection, pause the session
       // and start the expire countdown
