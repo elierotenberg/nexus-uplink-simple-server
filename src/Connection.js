@@ -79,7 +79,9 @@ module.exports = function({ UplinkSimpleServer }) {
         this.handshake
         .then((session) => session.detach(this));
       }
-      this.socket.close();
+      try { // Attempt to close the socket if possible.
+        this.socket.close();
+      } catch (err) {}
     }
 
     handshakeAck(pid) {

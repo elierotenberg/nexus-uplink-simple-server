@@ -162,7 +162,10 @@ require("6to5/polyfill");var Promise = (global || window).Promise = require("lod
           return session.detach(_this7);
         });
       }
-      this.socket.close();
+      try {
+        // Attempt to close the socket if possible.
+        this.socket.close();
+      } catch (err) {}
     };
 
     Connection.prototype.handshakeAck = function (pid) {
