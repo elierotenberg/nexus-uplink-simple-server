@@ -212,7 +212,7 @@ var UplinkSimpleServer = (function () {
             _context2.next = 8;
             break;
           }
-          // Diff and JSON-encode as early as possible to avoid duplicating
+          // Diff and hash as early as possible to avoid duplicating
           // these lengthy calculations down the propagation tree.
           // If no value was present before, then nullify the hash. No value has a null hash.
           if (!_this6._data[path]) {
@@ -225,7 +225,7 @@ var UplinkSimpleServer = (function () {
           _context2.next = 6;
           return Object.keys(_this6.subscribers[path]) // jshint ignore:line
           .map(function (k) {
-            return _this6.subscribers[path][k].update(path, { hash: hash, diff: diff });
+            return _this6.subscribers[path][k].update({ path: path, hash: hash, diff: diff });
           });
         case 6: _context2.next = 9;
           break;
@@ -278,7 +278,6 @@ var UplinkSimpleServer = (function () {
 
   UplinkSimpleServer.prototype.emit = regeneratorRuntime.mark(function _callee3(room, params) {
     var _this9 = this;
-    var json;
     return regeneratorRuntime.wrap(function _callee3$(_context3) {
       while (true) switch (_context3.prev = _context3.next) {
         case 0: // jshint ignore:line
@@ -286,18 +285,15 @@ var UplinkSimpleServer = (function () {
             return room.should.be.a.String && params.should.be.an.Object && (_this9.rooms.match(room) !== null).should.be.ok;
           });
           if (!_this9.listeners[room]) {
-            _context3.next = 5;
+            _context3.next = 4;
             break;
           }
-          // Encode as early as possible to avoid duplicating
-          // this operation down the propagation tree.
-          json = _.prollystringify(params);
-          _context3.next = 5;
+          _context3.next = 4;
           return Object.keys(_this9.listeners[room]) // jshint ignore:line
           .map(function (k) {
-            return _this9.listeners[room][k].emit(room, json);
+            return _this9.listeners[room][k].emit({ room: room, params: params });
           });
-        case 5:
+        case 4:
         case "end": return _context3.stop();
       }
     }, _callee3, this);

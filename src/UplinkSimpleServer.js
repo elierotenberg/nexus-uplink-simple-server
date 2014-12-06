@@ -162,7 +162,7 @@ class UplinkSimpleServer {
     );
     if(this.subscribers[path]) {
       let hash, diff;
-      // Diff and JSON-encode as early as possible to avoid duplicating
+      // Diff and hash as early as possible to avoid duplicating
       // these lengthy calculations down the propagation tree.
       // If no value was present before, then nullify the hash. No value has a null hash.
       if(!this._data[path]) {
@@ -177,7 +177,7 @@ class UplinkSimpleServer {
       // of the actual contents; they only need to forward the diff
       // to their associated clients.
       yield Object.keys(this.subscribers[path]) // jshint ignore:line
-      .map((k) => this.subscribers[path][k].update(path, { hash, diff }));
+      .map((k) => this.subscribers[path][k].update({ path, hash, diff }));
     }
     else {
       this._data[path] = value;
@@ -230,13 +230,9 @@ class UplinkSimpleServer {
       params.should.be.an.Object &&
       (this.rooms.match(room) !== null).should.be.ok
     );
-    let json;
     if(this.listeners[room]) {
-      // Encode as early as possible to avoid duplicating
-      // this operation down the propagation tree.
-      json = _.prollystringify(params);
       yield Object.keys(this.listeners[room]) // jshint ignore:line
-      .map((k) => this.listeners[room][k].emit(room, json));
+      .map((k) => this.listeners[room][k].emit({ room, params }));
     }
   }
 
