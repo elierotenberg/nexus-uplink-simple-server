@@ -408,7 +408,7 @@ var UplinkSimpleServer = (function () {
       return guid.should.be.a.String;
     });
     if (!this.sessions[guid]) {
-      this.sessions[guid] = this.sessionCreated(new Session({ guid: guid, uplink: this, timeout: this.timeout }));
+      this.sessions[guid] = this.sessionCreated(new Session({ guid: guid, uplink: this, timeout: this.timeout })).cancellable();
     }
     return this.sessions[guid];
   };
@@ -416,8 +416,9 @@ var UplinkSimpleServer = (function () {
   UplinkSimpleServer.prototype.deleteSession = function (session) {
     var _this15 = this;
     _.dev(function () {
-      return session.should.be.an.instanceOf(Session) && (_this15.sessions[session.guid] !== void 0).should.be.ok && _this15.sessions[session.guid].should.be.exactly(session);
+      return session.should.be.an.instanceOf(Session) && (_this15.sessions[session.guid] !== void 0).should.be.ok;
     });
+    this.sessions[session.guid].cancel(new Error("Session deleted."));
     delete this.sessions[session.guid];
     session.destroy();
     return this.sessionDeleted(session);
