@@ -408,13 +408,13 @@ var UplinkSimpleServer = (function () {
     return this.sessions[guid];
   };
 
-  UplinkSimpleServer.prototype.deleteSession = function (guid) {
+  UplinkSimpleServer.prototype.deleteSession = function (session) {
+    var _this15 = this;
     _.dev(function () {
-      return guid.should.be.a.String;
+      return session.should.be.an.instanceOf(Session) && (_this15.sessions[session.guid] !== void 0).should.be.ok && _this15.session[session.guid].should.be.exactly(session);
     });
-    var session = this.sessions[guid];
+    delete this.sessions[session.guid];
     session.destroy();
-    delete this.sessions[guid];
     return this.sessionDeleted(session);
   };
 

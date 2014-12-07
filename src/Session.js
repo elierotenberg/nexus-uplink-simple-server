@@ -55,7 +55,7 @@ module.exports = function({ Connection, UplinkSimpleServer }) {
     expire() {
       this.expired = true;
       _.dev(() => console.warn('nexus-uplink-simple-server', '!!', 'expire', this.guid));
-      return this.uplink.deleteSession(this.guid);
+      return this.uplink.deleteSession(this);
     }
 
     pause() {

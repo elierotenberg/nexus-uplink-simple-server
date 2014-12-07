@@ -82,7 +82,7 @@ require("6to5/polyfill");var Promise = (global || window).Promise = require("lod
       _.dev(function () {
         return console.warn("nexus-uplink-simple-server", "!!", "expire", _this4.guid);
       });
-      return this.uplink.deleteSession(this.guid);
+      return this.uplink.deleteSession(this);
     };
 
     Session.prototype.pause = function () {

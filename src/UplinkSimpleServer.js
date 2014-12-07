@@ -335,11 +335,13 @@ class UplinkSimpleServer {
     return this.sessions[guid];
   }
 
-  deleteSession(guid) {
-    _.dev(() => guid.should.be.a.String);
-    let session = this.sessions[guid];
+  deleteSession(session) {
+    _.dev(() => session.should.be.an.instanceOf(Session) &&
+      (this.sessions[session.guid] !== void 0).should.be.ok &&
+      this.session[session.guid].should.be.exactly(session)
+    );
+    delete this.sessions[session.guid];
     session.destroy();
-    delete this.sessions[guid];
     return this.sessionDeleted(session);
   }
 
