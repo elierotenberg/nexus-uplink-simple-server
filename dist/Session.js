@@ -77,25 +77,35 @@ require("6to5/polyfill");var Promise = (global || window).Promise = require("lod
     };
 
     Session.prototype.expire = function () {
+      var _this4 = this;
       this.expired = true;
-      return this.uplink.deleteSession(this);
+      _.dev(function () {
+        return console.warn("nexus-uplink-simple-server", "!!", "expire", _this4.guid);
+      });
+      return this.uplink.deleteSession(this.guid);
     };
 
     Session.prototype.pause = function () {
-      var _this4 = this;
+      var _this5 = this;
       _.dev(function () {
-        return _this4.paused.should.not.be.ok;
+        return _this5.paused.should.not.be.ok;
+      });
+      _.dev(function () {
+        return console.warn("nexus-uplink-simple-server", "!!", "pause", _this5.guid);
       });
       this.timeout = setTimeout(function () {
-        return _this4.expire();
+        return _this5.expire();
       }, EXPIRE_TIMEOUT);
       return this;
     };
 
     Session.prototype.resume = function () {
-      var _this5 = this;
+      var _this6 = this;
       _.dev(function () {
-        return _this5.paused.should.be.ok;
+        return _this6.paused.should.be.ok;
+      });
+      _.dev(function () {
+        return console.warn("nexus-uplink-simple-server", "!!", "resume", _this6.guid);
       });
       // Prevent the expiration timeout
       clearTimeout(this.timeout);
@@ -104,9 +114,9 @@ require("6to5/polyfill");var Promise = (global || window).Promise = require("lod
     };
 
     Session.prototype.detach = function (connection) {
-      var _this6 = this;
+      var _this7 = this;
       _.dev(function () {
-        return connection.should.be.an.instanceOf(Connection) && (_this6.connections[connection.id] !== void 0).should.be.ok && _this6.connections[connection.id].should.be.exactly(connection);
+        return connection.should.be.an.instanceOf(Connection) && (_this7.connections[connection.id] !== void 0).should.be.ok && _this7.connections[connection.id].should.be.exactly(connection);
       });
       delete this.connections[connection.id];
       // If this was the last connection, pause the session
@@ -125,18 +135,18 @@ require("6to5/polyfill");var Promise = (global || window).Promise = require("lod
     };
 
     Session.prototype.subscribeTo = function (path) {
-      var _this7 = this;
+      var _this8 = this;
       _.dev(function () {
-        return path.should.be.a.String && (_this7.subscriptions[path] === void 0).should.be.ok;
+        return path.should.be.a.String && (_this8.subscriptions[path] === void 0).should.be.ok;
       });
       this.subscriptions[path] = true;
       return this.uplink.subscribeTo(path, this);
     };
 
     Session.prototype.unsubscribeFrom = function (path) {
-      var _this8 = this;
+      var _this9 = this;
       _.dev(function () {
-        return path.should.be.a.String && (_this8.subscriptions[path] !== void 0).should.be.ok;
+        return path.should.be.a.String && (_this9.subscriptions[path] !== void 0).should.be.ok;
       });
       delete this.subscriptions[path];
       return this.uplink.unsubscribeFrom(path, this);
@@ -149,18 +159,18 @@ require("6to5/polyfill");var Promise = (global || window).Promise = require("lod
     };
 
     Session.prototype.listenTo = function (room) {
-      var _this9 = this;
+      var _this10 = this;
       _.dev(function () {
-        return room.should.be.a.String && (_this9.listeners[room] === void 0).should.be.ok;
+        return room.should.be.a.String && (_this10.listeners[room] === void 0).should.be.ok;
       });
       this.listeners[room] = true;
       return this.uplink.listenTo(room, this);
     };
 
     Session.prototype.unlistenFrom = function (room) {
-      var _this10 = this;
+      var _this11 = this;
       _.dev(function () {
-        return room.should.be.a.String && (_this10.listeners[room] !== void 0).should.be.ok;
+        return room.should.be.a.String && (_this11.listeners[room] !== void 0).should.be.ok;
       });
       delete this.listeners[room];
       return this.uplink.unlistenFrom(room, this);

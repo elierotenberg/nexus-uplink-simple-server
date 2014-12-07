@@ -54,11 +54,13 @@ module.exports = function({ Connection, UplinkSimpleServer }) {
 
     expire() {
       this.expired = true;
-      return this.uplink.deleteSession(this);
+      _.dev(() => console.warn('nexus-uplink-simple-server', '!!', 'expire', this.guid));
+      return this.uplink.deleteSession(this.guid);
     }
 
     pause() {
       _.dev(() => this.paused.should.not.be.ok);
+      _.dev(() => console.warn('nexus-uplink-simple-server', '!!', 'pause', this.guid));
       this.timeout = setTimeout(() => this.expire(), EXPIRE_TIMEOUT);
       return this;
     }
@@ -66,6 +68,7 @@ module.exports = function({ Connection, UplinkSimpleServer }) {
 
     resume() {
       _.dev(() => this.paused.should.be.ok);
+      _.dev(() => console.warn('nexus-uplink-simple-server', '!!', 'resume', this.guid));
       // Prevent the expiration timeout
       clearTimeout(this.timeout);
       this.timeout = null;

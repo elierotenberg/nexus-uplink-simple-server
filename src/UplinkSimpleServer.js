@@ -9,6 +9,7 @@ let Connection, Session;
 
 const ioHandlers = {
   connection(socket) {
+    _.dev(() => console.warn('nexus-uplink-simple-server', '<<', 'connection', socket.id));
     _.dev(() => instanceOfSocketIO(socket).should.be.ok &&
       (this.connections[socket.id] === void 0).should.be.ok
     );
@@ -17,6 +18,7 @@ const ioHandlers = {
   },
 
   disconnection(socket) {
+    _.dev(() => console.warn('nexus-uplink-simple-server', '<<', 'disconnection', socket.id));
     _.dev(() => socket.should.be.an.Object &&
       socket.on.should.be.a.Function &&
       socket.emit.should.be.a.Function &&
@@ -85,7 +87,6 @@ class UplinkSimpleServer {
     // Delegate to static ioHandler methods, but call them with context.
     Object.keys(ioHandlers)
     .forEach((event) => io.on(event, (params) => {
-      _.dev(() => console.warn('nexus-uplink-simple-server', '<<', event));
       ioHandlers[event].call(this, params);
     }));
 

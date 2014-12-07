@@ -13,6 +13,9 @@ var ioHandlers = {
   connection: function (socket) {
     var _this = this;
     _.dev(function () {
+      return console.warn("nexus-uplink-simple-server", "<<", "connection", socket.id);
+    });
+    _.dev(function () {
       return instanceOfSocketIO(socket).should.be.ok && (_this.connections[socket.id] === void 0).should.be.ok;
     });
     this.connections[socket.id] = new Connection({ socket: socket, uplink: this });
@@ -23,6 +26,9 @@ var ioHandlers = {
 
   disconnection: function (socket) {
     var _this2 = this;
+    _.dev(function () {
+      return console.warn("nexus-uplink-simple-server", "<<", "disconnection", socket.id);
+    });
     _.dev(function () {
       return socket.should.be.an.Object && socket.on.should.be.a.Function && socket.emit.should.be.a.Function && socket.id.should.be.a.String && (_this2.connections[socket.id] !== void 0).should.be.ok && (_this2.connections[socket.id].socket !== void 0).should.be.ok && _this2.connections[socket.id].socket.should.be.exactly(socket);
     });
@@ -99,9 +105,6 @@ var UplinkSimpleServer = (function () {
       // Delegate to static ioHandler methods, but call them with context.
       Object.keys(ioHandlers).forEach(function (event) {
         return io.on(event, function (params) {
-          _.dev(function () {
-            return console.warn("nexus-uplink-simple-server", "<<", event);
-          });
           ioHandlers[event].call(_this3, params);
         });
       });
