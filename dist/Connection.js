@@ -22,9 +22,9 @@ require("6to5/polyfill");var Promise = (global || window).Promise = require("lod
       return regeneratorRuntime.wrap(function _callee$(_context) {
         while (true) switch (_context.prev = _context.next) {
           case 0: guid = _ref2.guid;
-            (function () {
-              return _this.handshake.isPending().should.be.ok && guid.should.be.a.String;
-            })();
+            _.dev(function () {
+              return guid.should.be.a.String;
+            });
             _context.next = 4;
             return _this.uplink.getSession(guid);
           case 4: session = _context.sent;

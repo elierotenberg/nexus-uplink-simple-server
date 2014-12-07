@@ -4,7 +4,7 @@ module.exports = function({ UplinkSimpleServer }) {
 
   const ioHandlers = _.mapValues({
     *handshake({ guid }) {
-      (() => this.handshake.isPending().should.be.ok && guid.should.be.a.String)();
+      _.dev(() => guid.should.be.a.String);
       const session = yield this.uplink.getSession(guid);
       session.attach(this);
       this._handshake.resolve(session);
