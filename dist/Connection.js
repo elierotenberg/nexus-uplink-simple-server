@@ -15,6 +15,8 @@ require("6to5/polyfill");var Promise = (global || window).Promise = require("lod
   var _ = require("lodash-next");
   var instanceOfSocketIO = require("./instanceOfSocketIO");
 
+  var HANDSHAKE_TIMEOUT = 5000;
+
   var ioHandlers = _.mapValues({
     handshake: regeneratorRuntime.mark(function _callee(_ref2) {
       var _this = this;
@@ -30,8 +32,9 @@ require("6to5/polyfill");var Promise = (global || window).Promise = require("lod
           case 4: session = _context.sent;
             session.attach(_this);
             _this._handshake.resolve(session);
+            _this._handshake = null;
             _this.handshakeAck(_this.uplink.pid);
-          case 8:
+          case 9:
           case "end": return _context.stop();
         }
       }, _callee, this);
@@ -126,7 +129,7 @@ require("6to5/polyfill");var Promise = (global || window).Promise = require("lod
       // handshake should resolve to the session this connection will be attached to
       this.handshake = new Promise(function (resolve, reject) {
         return _this6._handshake = { resolve: resolve, reject: reject };
-      }).cancellable();
+      }).timeout(HANDSHAKE_TIMEOUT, "Handshake timeout expired.").cancellable();
       Object.keys(ioHandlers).forEach(function (event) {
         return socket.on(event, function (params) {
           _.dev(function () {
@@ -140,32 +143,39 @@ require("6to5/polyfill");var Promise = (global || window).Promise = require("lod
     };
 
     Connection.prototype.push = function (event, params) {
+      var _this7 = this;
       _.dev(function () {
         return event.should.be.a.String;
       });
       _.dev(function () {
-        return console.warn("nexus-uplink-simple-server", ">>", event, params);
+        return console.warn("nexus-uplink-simple-server", _this7.socket.id, ">>", event, params);
       });
       this.socket.emit(event, params);
     };
 
     Connection.prototype.destroy = function () {
-      var _this7 = this;
+      var _this8 = this;
       _.dev(function () {
-        return _this7.shouldNotBeDestroyed;
+        return _this8.shouldNotBeDestroyed;
       });
-      this._destroyed = true;
-      if (this.handshake.isPending()) {
-        this.handshake.cancel();
+      if (this._handshake) {
+        this.handshake.cancel(new Error("Connection destroyed."));
       } else {
         this.handshake.then(function (session) {
-          return session.detach(_this7);
+          return session.detach(_this8);
         });
       }
       try {
         // Attempt to close the socket if possible.
-        this.socket.close();
-      } catch (err) {}
+        this.socket.disconnect();
+      } catch (err) {
+        _.dev(function () {
+          throw err;
+        });
+      }
+      _.dev(function () {
+        return console.warn("nexus-uplink-simple-server", _this8.socket.id, "!!", "destroy");
+      });
     };
 
     Connection.prototype.handshakeAck = function (pid) {

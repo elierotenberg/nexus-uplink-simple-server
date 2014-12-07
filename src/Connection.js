@@ -2,12 +2,15 @@ module.exports = function({ UplinkSimpleServer }) {
   const _ = require('lodash-next');
   const instanceOfSocketIO = require('./instanceOfSocketIO');
 
+  const HANDSHAKE_TIMEOUT = 5000;
+
   const ioHandlers = _.mapValues({
     *handshake({ guid }) {
       _.dev(() => guid.should.be.a.String);
       const session = yield this.uplink.getSession(guid);
       session.attach(this);
       this._handshake.resolve(session);
+      this._handshake = null;
       this.handshakeAck(this.uplink.pid);
     },
 
@@ -44,7 +47,9 @@ module.exports = function({ UplinkSimpleServer }) {
       this.socket = socket;
       this.uplink = uplink;
       // handshake should resolve to the session this connection will be attached to
-      this.handshake = new Promise((resolve, reject) => this._handshake = { resolve, reject }).cancellable();
+      this.handshake = new Promise((resolve, reject) => this._handshake = { resolve, reject })
+      .timeout(HANDSHAKE_TIMEOUT, 'Handshake timeout expired.')
+      .cancellable();
       Object.keys(ioHandlers)
       .forEach((event) =>
         socket.on(event, (params) => {
@@ -65,23 +70,26 @@ module.exports = function({ UplinkSimpleServer }) {
 
     push(event, params) {
       _.dev(() => event.should.be.a.String);
-      _.dev(() => console.warn('nexus-uplink-simple-server', '>>', event, params));
+      _.dev(() => console.warn('nexus-uplink-simple-server', this.socket.id, '>>', event, params));
       this.socket.emit(event, params);
     }
 
     destroy() {
       _.dev(() => this.shouldNotBeDestroyed);
-      this._destroyed = true;
-      if(this.handshake.isPending()) {
-        this.handshake.cancel();
+      if(this._handshake) {
+        this.handshake.cancel(new Error('Connection destroyed.'));
       }
       else {
         this.handshake
         .then((session) => session.detach(this));
       }
       try { // Attempt to close the socket if possible.
-        this.socket.close();
-      } catch (err) {}
+        this.socket.disconnect();
+      }
+      catch (err) {
+        _.dev(() => { throw err; });
+      }
+      _.dev(() => console.warn('nexus-uplink-simple-server', this.socket.id, '!!', 'destroy'));
     }
 
     handshakeAck(pid) {
