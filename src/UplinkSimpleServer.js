@@ -7,6 +7,8 @@ const http = require('http');
 const instanceOfSocketIO = require('./instanceOfSocketIO');
 let Connection, Session;
 
+const DEFAULT_EXPIRE_TIMEOUT = 30000;
+
 const ioHandlers = {
   connection(socket) {
     _.dev(() => console.warn('nexus-uplink-simple-server', '<<', 'connection', socket.id));
@@ -41,14 +43,16 @@ class UplinkSimpleServer {
   // stores, rooms, and actions are three whitelists of
   // string patterns. Each is an array that will be passed
   // to the Router constructor.
-  constructor({ pid, stores, rooms, actions, app }) {
+  constructor({ pid, stores, rooms, actions, app, timeout }) {
+    timeout = timeout || DEFAULT_EXPIRE_TIMEOUT;
     _.dev(() => (pid !== undefined).should.be.ok &&
       stores.should.be.an.Array &&
       rooms.should.be.an.Array &&
       actions.should.be.an.Array &&
       // Ducktype-check for an express-like app
       app.get.should.be.a.Function &&
-      app.post.should.be.a.Function
+      app.post.should.be.a.Function &&
+      timeout.should.be.a.Number.and.not.be.below(0)
     );
     this.pid = pid;
     // Here we use ConstantRouter instances; we only need
@@ -58,6 +62,7 @@ class UplinkSimpleServer {
     this.rooms = createConstantRouter(rooms);
     this.actions = createConstantRouter(actions);
     this.app = app;
+    this.timeout = timeout;
     this.server = http.Server(app);
 
     // Store data cache
@@ -330,7 +335,7 @@ class UplinkSimpleServer {
   getSession(guid) {
     _.dev(() => guid.should.be.a.String);
     if(!this.sessions[guid]) {
-      this.sessions[guid] = this.sessionCreated(new Session({ guid, uplink: this }));
+      this.sessions[guid] = this.sessionCreated(new Session({ guid, uplink: this, timeout: this.timeout }));
     }
     return this.sessions[guid];
   }
@@ -338,7 +343,7 @@ class UplinkSimpleServer {
   deleteSession(session) {
     _.dev(() => session.should.be.an.instanceOf(Session) &&
       (this.sessions[session.guid] !== void 0).should.be.ok &&
-      this.session[session.guid].should.be.exactly(session)
+      this.sessions[session.guid].should.be.exactly(session)
     );
     delete this.sessions[session.guid];
     session.destroy();
@@ -365,6 +370,7 @@ _.extend(UplinkSimpleServer.prototype, {
   rooms: null,
   actions: null,
   app: null,
+  timeout: null,
   server: null,
 
   _data: null,

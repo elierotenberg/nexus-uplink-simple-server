@@ -15,14 +15,13 @@ require("6to5/polyfill");var Promise = (global || window).Promise = require("lod
   var UplinkSimpleServer = _ref.UplinkSimpleServer;
   var _ = require("lodash-next");
 
-  var EXPIRE_TIMEOUT = 30000;
-
   var Session = (function () {
     var Session = function Session(_ref2) {
       var guid = _ref2.guid;
       var uplink = _ref2.uplink;
+      var timeout = _ref2.timeout;
       _.dev(function () {
-        return guid.should.be.a.String && uplink.should.be.an.instanceOf(UplinkSimpleServer);
+        return guid.should.be.a.String && uplink.should.be.an.instanceOf(UplinkSimpleServer) && timeout.should.be.a.Number.and.not.be.below(0);
       });
       _.extend(this, { guid: guid, uplink: uplink });
       this.connections = {};
@@ -30,7 +29,8 @@ require("6to5/polyfill");var Promise = (global || window).Promise = require("lod
       this.subscriptions = {};
       this.listeners = {};
 
-      this.timeout = null;
+      this.timeout = timeout;
+      this._timeout = null;
       this.expired = false;
       this.pause();
     };
@@ -93,9 +93,9 @@ require("6to5/polyfill");var Promise = (global || window).Promise = require("lod
       _.dev(function () {
         return console.warn("nexus-uplink-simple-server", "!!", "pause", _this5.guid);
       });
-      this.timeout = setTimeout(function () {
+      this._timeout = setTimeout(function () {
         return _this5.expire();
-      }, EXPIRE_TIMEOUT);
+      }, this.timeout);
       return this;
     };
 
@@ -108,8 +108,8 @@ require("6to5/polyfill");var Promise = (global || window).Promise = require("lod
         return console.warn("nexus-uplink-simple-server", "!!", "resume", _this6.guid);
       });
       // Prevent the expiration timeout
-      clearTimeout(this.timeout);
-      this.timeout = null;
+      clearTimeout(this._timeout);
+      this._timeout = null;
       return this;
     };
 
@@ -203,7 +203,7 @@ require("6to5/polyfill");var Promise = (global || window).Promise = require("lod
     _classProps(Session, null, {
       paused: {
         get: function () {
-          return (this.timeout !== null);
+          return (this._timeout !== null);
         }
       }
     });
@@ -216,6 +216,7 @@ require("6to5/polyfill");var Promise = (global || window).Promise = require("lod
     uplink: null,
     connections: null,
     timeout: null,
+    _timeout: null,
     expired: null,
     subscriptions: null,
     listeners: null });

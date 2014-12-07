@@ -1,12 +1,11 @@
 module.exports = function({ Connection, UplinkSimpleServer }) {
   const _ = require('lodash-next');
 
-  const EXPIRE_TIMEOUT = 30000;
-
   class Session {
-    constructor({ guid, uplink }) {
+    constructor({ guid, uplink, timeout }) {
       _.dev(() => guid.should.be.a.String &&
-        uplink.should.be.an.instanceOf(UplinkSimpleServer)
+        uplink.should.be.an.instanceOf(UplinkSimpleServer) &&
+        timeout.should.be.a.Number.and.not.be.below(0)
       );
       _.extend(this, { guid, uplink });
       this.connections = {};
@@ -14,7 +13,8 @@ module.exports = function({ Connection, UplinkSimpleServer }) {
       this.subscriptions = {};
       this.listeners = {};
 
-      this.timeout = null;
+      this.timeout = timeout;
+      this._timeout = null;
       this.expired = false;
       this.pause();
     }
@@ -29,7 +29,7 @@ module.exports = function({ Connection, UplinkSimpleServer }) {
     }
 
     get paused() {
-      return (this.timeout !== null);
+      return (this._timeout !== null);
     }
 
     // Just proxy the invocation to all attached connections, which implement the same APIs.
@@ -61,7 +61,7 @@ module.exports = function({ Connection, UplinkSimpleServer }) {
     pause() {
       _.dev(() => this.paused.should.not.be.ok);
       _.dev(() => console.warn('nexus-uplink-simple-server', '!!', 'pause', this.guid));
-      this.timeout = setTimeout(() => this.expire(), EXPIRE_TIMEOUT);
+      this._timeout = setTimeout(() => this.expire(), this.timeout);
       return this;
     }
 
@@ -70,8 +70,8 @@ module.exports = function({ Connection, UplinkSimpleServer }) {
       _.dev(() => this.paused.should.be.ok);
       _.dev(() => console.warn('nexus-uplink-simple-server', '!!', 'resume', this.guid));
       // Prevent the expiration timeout
-      clearTimeout(this.timeout);
-      this.timeout = null;
+      clearTimeout(this._timeout);
+      this._timeout = null;
       return this;
     }
 
@@ -151,6 +151,7 @@ module.exports = function({ Connection, UplinkSimpleServer }) {
     uplink: null,
     connections: null,
     timeout: null,
+    _timeout: null,
     expired: null,
     subscriptions: null,
     listeners: null,
