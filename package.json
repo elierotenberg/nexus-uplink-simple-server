@@ -28,12 +28,12 @@
     "jshint-stylish": "^1.0.0"
   },
   "dependencies": {
-    "6to5": "^1.14.17",
+    "6to5": "^1.15.0",
     "body-parser": "^1.10.0",
-    "http-exceptions": "^0.4.10",
-    "lodash-next": "^1.10.3",
-    "nexus-router": "^0.3.12",
-    "request": "^2.49.0",
+    "http-exceptions": "^0.4.11",
+    "lodash-next": "^1.10.4",
+    "nexus-router": "^0.3.13",
+    "request": "^2.51.0",
     "socket.io": "^1.2.1"
   }
 }
