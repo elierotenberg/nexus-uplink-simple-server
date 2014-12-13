@@ -13,10 +13,9 @@ var _classProps = function (child, staticProps, instanceProps) {
 require("6to5/polyfill");var Promise = (global || window).Promise = require("lodash-next").Promise;var __DEV__ = (process.env.NODE_ENV !== "production");var __PROD__ = !__DEV__;var __BROWSER__ = (typeof window === "object");var __NODE__ = !__BROWSER__;module.exports = function (_ref) {
   var UplinkSimpleServer = _ref.UplinkSimpleServer;
   var _ = require("lodash-next");
-  var instanceOfSocketIO = require("./instanceOfSocketIO");
+  var instanceOfEngineIOSocket = require("./instanceOfEngineIOSocket");
 
   var HANDSHAKE_TIMEOUT = 5000;
-
   var ioHandlers = _.mapValues({
     handshake: regeneratorRuntime.mark(function _callee(_ref2) {
       var _this = this;
@@ -121,7 +120,7 @@ require("6to5/polyfill");var Promise = (global || window).Promise = require("lod
       var socket = _ref7.socket;
       var uplink = _ref7.uplink;
       _.dev(function () {
-        return instanceOfSocketIO(socket).should.be.ok && uplink.should.be.an.instanceOf(UplinkSimpleServer);
+        return instanceOfEngineIOSocket(socket).should.be.ok && uplink.should.be.an.instanceOf(UplinkSimpleServer);
       });
       this._destroyed = false;
       this.socket = socket;
@@ -130,51 +129,83 @@ require("6to5/polyfill");var Promise = (global || window).Promise = require("lod
       this.handshake = new Promise(function (resolve, reject) {
         return _this6._handshake = { resolve: resolve, reject: reject };
       }).timeout(HANDSHAKE_TIMEOUT, "Handshake timeout expired.").cancellable();
-      Object.keys(ioHandlers).forEach(function (event) {
-        return socket.on(event, function (params) {
-          _.dev(function () {
-            return console.warn("nexus-uplink-simple-server", _this6.socket.id, "<<", event, params);
-          });
-          ioHandlers[event].call(_this6, params)["catch"](function (e) {
-            return _this6.err({ err: e.toString(), event: event, params: params, stack: __DEV__ ? e.stack : null });
-          });
-        });
+      socket.on("error", function (err) {
+        return _this6.handleError(err);
       });
+      socket.on("message", function (json) {
+        return _this6.handleMessage(json);
+      });
+    };
+
+    Connection.prototype.handleError = function (err) {
+      var _this7 = this;
+      _.dev(function () {
+        return console.error("nexus-uplink-simple-server", _this7.socket.id, "<<", err.toString());
+      });
+    };
+
+    Connection.prototype.handleMessage = function (json) {
+      var _this8 = this;
+      _.dev(function () {
+        return json.should.be.a.String;
+      });
+      try {
+        (function () {
+          var message = JSON.parse(json);
+          (function () {
+            return (message.event !== void 0).should.be.ok && (message.params !== void 0).should.be.ok;
+          })();
+          var event = message.event;
+          var params = message.params;
+          (function () {
+            return event.should.be.a.String && (ioHandlers[event] !== void 0).should.be.ok;
+          })();
+          (function () {
+            return params.should.be.an.Object;
+          })();
+          ioHandlers[event].call(_this8, params)["catch"](function (err) {
+            return _this8["throw"](err);
+          });
+        })();
+      } catch (err) {
+        return this["throw"](err);
+      }
+    };
+
+    Connection.prototype["throw"] = function (err) {
+      this.push("err", { err: err.toString(), stack: __DEV__ ? err.stack : void 0 });
     };
 
     Connection.prototype.push = function (event, params) {
-      var _this7 = this;
+      var _this9 = this;
       _.dev(function () {
-        return event.should.be.a.String;
+        return event.should.be.a.String && (params === null || _.isObject(params)).should.be.ok && _this9.shouldNotBeDestroyed && _this9.shouldBeConnected;
       });
       _.dev(function () {
-        return console.warn("nexus-uplink-simple-server", _this7.socket.id, ">>", event, params);
+        return console.warn("nexus-uplink-simple-server", _this9.socket.id, ">>", event, params);
       });
-      this.socket.emit(event, params);
+      var message = { event: event, params: params };
+      var json = this.uplink.stringify(message);
+      this.socket.send(json);
     };
 
     Connection.prototype.destroy = function () {
-      var _this8 = this;
+      var _this10 = this;
       _.dev(function () {
-        return _this8.shouldNotBeDestroyed;
+        return _this10.shouldNotBeDestroyed;
       });
       if (this._handshake) {
         this.handshake.cancel(new Error("Connection destroyed."));
       } else {
         this.handshake.then(function (session) {
-          return session.detach(_this8);
+          return session.detach(_this10);
         });
       }
-      try {
-        // Attempt to close the socket if possible.
-        this.socket.disconnect();
-      } catch (err) {
-        _.dev(function () {
-          throw err;
-        });
+      if (this.isConnected) {
+        this.socket.close();
       }
       _.dev(function () {
-        return console.warn("nexus-uplink-simple-server", _this8.socket.id, "!!", "destroy");
+        return console.warn("nexus-uplink-simple-server", _this10.socket.id, "!!", "destroy");
       });
     };
 
@@ -223,6 +254,16 @@ require("6to5/polyfill");var Promise = (global || window).Promise = require("lod
       shouldNotBeDestroyed: {
         get: function () {
           return this._destroyed.should.not.be.ok;
+        }
+      },
+      shouldBeConnected: {
+        get: function () {
+          return this.isConnected.should.be.ok;
+        }
+      },
+      isConnected: {
+        get: function () {
+          return this.socket.readyState === "open";
         }
       },
       id: {

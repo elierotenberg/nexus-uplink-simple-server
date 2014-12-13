@@ -3,36 +3,14 @@ const bodyParser = require('body-parser');
 const ConstantRouter = require('nexus-router').ConstantRouter;
 const HTTPExceptions = require('http-exceptions');
 const http = require('http');
+const EngineIO = require('engine.io');
+const instanceOfEngineIOSocket = require('./instanceOfEngineIOSocket');
+const JSONCache = require('./JSONCache');
 
-const instanceOfSocketIO = require('./instanceOfSocketIO');
 let Connection, Session;
 
-const DEFAULT_EXPIRE_TIMEOUT = 30000;
-
-const ioHandlers = {
-  connection(socket) {
-    _.dev(() => console.warn('nexus-uplink-simple-server', '<<', 'connection', socket.id));
-    _.dev(() => instanceOfSocketIO(socket).should.be.ok &&
-      (this.connections[socket.id] === void 0).should.be.ok
-    );
-    this.connections[socket.id] = new Connection({ socket, uplink: this });
-    socket.on('disconnect', () => ioHandlers.disconnection.call(this, socket));
-  },
-
-  disconnection(socket) {
-    _.dev(() => console.warn('nexus-uplink-simple-server', '<<', 'disconnection', socket.id));
-    _.dev(() => socket.should.be.an.Object &&
-      socket.on.should.be.a.Function &&
-      socket.emit.should.be.a.Function &&
-      socket.id.should.be.a.String &&
-      (this.connections[socket.id] !== void 0).should.be.ok &&
-      (this.connections[socket.id].socket !== void 0).should.be.ok &&
-      this.connections[socket.id].socket.should.be.exactly(socket)
-    );
-    this.connections[socket.id].destroy();
-    delete this.connections[socket.id];
-  },
-};
+const DEFAULT_EXPIRE_TIMEOUT = 10000;
+const DEFAULT_JSONCACHE_SIZE = 10000;
 
 // Most public methods expose an async API
 // to enforce consistence with async data backends,
@@ -43,8 +21,9 @@ class UplinkSimpleServer {
   // stores, rooms, and actions are three whitelists of
   // string patterns. Each is an array that will be passed
   // to the Router constructor.
-  constructor({ pid, stores, rooms, actions, app, timeout }) {
+  constructor({ pid, stores, rooms, actions, app, timeout, jsonCache }) {
     timeout = timeout || DEFAULT_EXPIRE_TIMEOUT;
+    jsonCache = jsonCache || {};
     _.dev(() => (pid !== undefined).should.be.ok &&
       stores.should.be.an.Array &&
       rooms.should.be.an.Array &&
@@ -52,8 +31,11 @@ class UplinkSimpleServer {
       // Ducktype-check for an express-like app
       app.get.should.be.a.Function &&
       app.post.should.be.a.Function &&
-      timeout.should.be.a.Number.and.not.be.below(0)
+      timeout.should.be.a.Number.and.not.be.below(0) &&
+      jsonCache.should.be.an.Object
     );
+    jsonCache.maxSize = jsonCache.maxSize || DEFAULT_JSONCACHE_SIZE;
+    _.dev(() => jsonCache.maxSize.should.be.a.Number.not.below(0));
     this.pid = pid;
     // Here we use ConstantRouter instances; we only need
     // to know if a given string match a registered pattern.
@@ -64,6 +46,10 @@ class UplinkSimpleServer {
     this.app = app;
     this.timeout = timeout;
     this.server = http.Server(app);
+    this.io = EngineIO.Server();
+
+    // JSON Encoding cache
+    this.jsonCache = new JSONCache(jsonCache);
 
     // Store data cache
     this._data = {};
@@ -86,17 +72,23 @@ class UplinkSimpleServer {
 
   listen(port, fn = _.noop) {
     _.dev(() => port.should.be.a.Number);
-    let { app, server } = this;
-    // socket.io handlers are installed first, to pre-empt some paths over the http handlers.
-    let io = require('socket.io')(server);
-    // Delegate to static ioHandler methods, but call them with context.
-    Object.keys(ioHandlers)
-    .forEach((event) => io.on(event, (params) => {
-      ioHandlers[event].call(this, params);
-    }));
 
+    this.bindIOHandlers();
+    this.bindHTTPHandlers();
+
+    // Attach the EngineIO handlers first
+    this.server.listen(port, fn);
+    return this;
+  }
+
+  bindIOHandlers() {
+    this.io.attach(this.server);
+    this.io.on('connection', (socket) => this.handleConnection(socket));
+  }
+
+  bindHTTPHandlers() {
     // Fetch from store
-    app.get('*',
+    this.app.get('*',
       // Check that this store path is whitelisted
       (req, res, next) => this.stores.match(req.path) === null ? HTTPExceptions.forward(res, new HTTPExceptions.NotFound(req.path)) : next(),
       (req, res) => this.pull(req.path)
@@ -119,7 +111,7 @@ class UplinkSimpleServer {
     );
 
     // Dispatch action
-    app.post('*',
+    this.app.post('*',
       // Parse body as JSON
       bodyParser.json(),
       // Check that this action path is whitelisted
@@ -144,8 +136,32 @@ class UplinkSimpleServer {
           }
       })
     );
-    server.listen(port, fn);
-    return this;
+
+  }
+
+  handleConnection(socket) {
+    _.dev(() => console.warn('nexus-uplink-simple-server', '<<', 'connection', socket.id));
+    _.dev(() => instanceOfEngineIOSocket(socket).should.be.ok &&
+      (this.connections[socket.id] === void 0).should.be.ok
+    );
+    this.connections[socket.id] = new Connection({ socket, uplink: this });
+    socket.on('close', (reason, desc) => this.handleDisconnection(socket, reason, desc));
+  }
+
+  handleDisconnection(socket, reason, desc = null) {
+    _.dev(() => console.warn('nexus-uplink-simple-server', '<<', 'disconnection', { socket, reason, desc }));
+    _.dev(() => instanceOfEngineIOSocket(socket).should.be.ok &&
+      (this.connections[socket.id] !== void 0).should.be.ok &&
+      (this.connections[socket.id].socket !== void 0).should.be.ok &&
+      this.connections[socket.id].socket.should.be.exactly(socket)
+    );
+    this.connections[socket.id].destroy();
+    delete this.connections[socket.id];
+  }
+
+  stringify(object) {
+    _.dev(() => object.should.be.an.Object);
+    return this.jsonCache.stringify(object);
   }
 
   pull(path) {
@@ -373,6 +389,7 @@ _.extend(UplinkSimpleServer.prototype, {
   timeout: null,
   server: null,
 
+  jsonCache: null,
   _data: null,
 
   connections: null,

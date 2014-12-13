@@ -30,10 +30,12 @@
   "dependencies": {
     "6to5": "^1.15.0",
     "body-parser": "^1.10.0",
+    "engine.io": "^1.4.3",
     "http-exceptions": "^0.4.11",
     "lodash-next": "^1.10.4",
+    "lru-cache": "^2.5.0",
     "nexus-router": "^0.3.13",
     "request": "^2.51.0",
-    "socket.io": "^1.2.1"
+    "sigmund": "^1.0.0"
   }
 }

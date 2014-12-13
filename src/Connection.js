@@ -1,9 +1,8 @@
 module.exports = function({ UplinkSimpleServer }) {
   const _ = require('lodash-next');
-  const instanceOfSocketIO = require('./instanceOfSocketIO');
+  const instanceOfEngineIOSocket = require('./instanceOfEngineIOSocket');
 
   const HANDSHAKE_TIMEOUT = 5000;
-
   const ioHandlers = _.mapValues({
     *handshake({ guid }) {
       _.dev(() => guid.should.be.a.String);
@@ -40,7 +39,7 @@ module.exports = function({ UplinkSimpleServer }) {
 
   class Connection {
     constructor({ socket, uplink }) {
-      _.dev(() => instanceOfSocketIO(socket).should.be.ok &&
+      _.dev(() => instanceOfEngineIOSocket(socket).should.be.ok &&
         uplink.should.be.an.instanceOf(UplinkSimpleServer)
       );
       this._destroyed = false;
@@ -50,28 +49,61 @@ module.exports = function({ UplinkSimpleServer }) {
       this.handshake = new Promise((resolve, reject) => this._handshake = { resolve, reject })
       .timeout(HANDSHAKE_TIMEOUT, 'Handshake timeout expired.')
       .cancellable();
-      Object.keys(ioHandlers)
-      .forEach((event) =>
-        socket.on(event, (params) => {
-          _.dev(() => console.warn('nexus-uplink-simple-server', this.socket.id, '<<', event, params));
-          ioHandlers[event].call(this, params)
-          .catch((e) => this.err({ err: e.toString(), event, params, stack: __DEV__ ? e.stack : null }));
-        })
-      );
+      socket.on('error', (err) => this.handleError(err));
+      socket.on('message', (json) => this.handleMessage(json));
     }
 
     get shouldNotBeDestroyed() {
       return this._destroyed.should.not.be.ok;
     }
 
+    get shouldBeConnected() {
+      return this.isConnected.should.be.ok;
+    }
+
+    get isConnected() {
+      return this.socket.readyState === 'open';
+    }
+
     get id() {
       return this.socket.id;
     }
 
+    handleError(err) {
+      _.dev(() => console.error('nexus-uplink-simple-server', this.socket.id, '<<', err.toString()));
+    }
+
+    handleMessage(json) {
+      _.dev(() => json.should.be.a.String);
+      try {
+        const message = JSON.parse(json);
+        (() => (message['event'] !== void 0).should.be.ok && (message['params'] !== void 0).should.be.ok)();
+        const event = message.event;
+        const params = message.params;
+        (() => event.should.be.a.String && (ioHandlers[event] !== void 0).should.be.ok)();
+        (() => params.should.be.an.Object)();
+        ioHandlers[event].call(this, params)
+        .catch((err) => this.throw(err));
+      }
+      catch(err) {
+        return this.throw(err);
+      }
+    }
+
+    throw(err) {
+      this.push('err', { err: err.toString(), stack: __DEV__ ? err.stack : void 0 });
+    }
+
     push(event, params) {
-      _.dev(() => event.should.be.a.String);
+      _.dev(() => event.should.be.a.String &&
+        (params === null || _.isObject(params)).should.be.ok &&
+        this.shouldNotBeDestroyed &&
+        this.shouldBeConnected
+      );
       _.dev(() => console.warn('nexus-uplink-simple-server', this.socket.id, '>>', event, params));
-      this.socket.emit(event, params);
+      const message = { event, params };
+      const json = this.uplink.stringify(message);
+      this.socket.send(json);
     }
 
     destroy() {
@@ -83,11 +115,8 @@ module.exports = function({ UplinkSimpleServer }) {
         this.handshake
         .then((session) => session.detach(this));
       }
-      try { // Attempt to close the socket if possible.
-        this.socket.disconnect();
-      }
-      catch (err) {
-        _.dev(() => { throw err; });
+      if(this.isConnected) {
+        this.socket.close();
       }
       _.dev(() => console.warn('nexus-uplink-simple-server', this.socket.id, '!!', 'destroy'));
     }
