@@ -37,4 +37,4 @@ var JSONCache = (function () {
 _.extend(JSONCache.prototype, {
   cache: null });
 
-return JSONCache;
+module.exports = JSONCache;
