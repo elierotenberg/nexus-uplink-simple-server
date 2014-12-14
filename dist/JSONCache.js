@@ -9,7 +9,7 @@ var JSONCache = (function () {
     var maxSize = _ref.maxSize;
     var maxAge = _ref.maxAge;
     _.dev(function () {
-      return maxSize.shoul.be.a.Number.not.below(0);
+      return maxSize.should.be.a.Number.not.below(0);
     });
     maxAge = maxAge || void 0;
     this.cache = new LRUCache({ max: maxSize, maxAge: maxAge });

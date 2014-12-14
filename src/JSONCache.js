@@ -4,7 +4,7 @@ const sigmund = require('sigmund');
 
 class JSONCache {
   constructor({ maxSize, maxAge }) {
-    _.dev(() => maxSize.shoul.be.a.Number.not.below(0));
+    _.dev(() => maxSize.should.be.a.Number.not.below(0));
     maxAge = maxAge || void 0;
     this.cache = new LRUCache({ max: maxSize, maxAge });
   }
