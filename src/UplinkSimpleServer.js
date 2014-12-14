@@ -148,8 +148,8 @@ class UplinkSimpleServer {
     socket.on('close', (reason, desc) => this.handleDisconnection(socket, reason, desc));
   }
 
-  handleDisconnection(socket, reason, desc = null) {
-    _.dev(() => console.warn('nexus-uplink-simple-server', '<<', 'disconnection', { socket, reason, desc }));
+  handleDisconnection(socket, reason, desc) {
+    _.dev(() => console.warn('nexus-uplink-simple-server', '<<', 'disconnection', socket.id, { reason, desc }));
     _.dev(() => instanceOfEngineIOSocket(socket).should.be.ok &&
       (this.connections[socket.id] !== void 0).should.be.ok &&
       (this.connections[socket.id].socket !== void 0).should.be.ok &&

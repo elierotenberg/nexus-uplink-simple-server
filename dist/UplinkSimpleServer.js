@@ -192,9 +192,8 @@ var UplinkSimpleServer = (function () {
 
   UplinkSimpleServer.prototype.handleDisconnection = function (socket, reason, desc) {
     var _this5 = this;
-    if (desc === undefined) desc = null;
     _.dev(function () {
-      return console.warn("nexus-uplink-simple-server", "<<", "disconnection", { socket: socket, reason: reason, desc: desc });
+      return console.warn("nexus-uplink-simple-server", "<<", "disconnection", socket.id, { reason: reason, desc: desc });
     });
     _.dev(function () {
       return instanceOfEngineIOSocket(socket).should.be.ok && (_this5.connections[socket.id] !== void 0).should.be.ok && (_this5.connections[socket.id].socket !== void 0).should.be.ok && _this5.connections[socket.id].socket.should.be.exactly(socket);
