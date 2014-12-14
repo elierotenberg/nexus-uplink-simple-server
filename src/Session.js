@@ -86,6 +86,7 @@ module.exports = function({ Connection, UplinkSimpleServer }) {
       this.isPaused.should.not.be.ok;
       _.dev(() => Object.keys(this._connections).length.should.be.exactly(0));
       this._expireTimeout = setTimeout(() => this._handleExpire(), this._activityTimeout);
+      this.events.emit('pause');
       return this;
     }
 
@@ -94,6 +95,7 @@ module.exports = function({ Connection, UplinkSimpleServer }) {
       _.dev(() => Object.keys(this._connections).length.should.be.above(0));
       clearTimeout(this._expireTimeout);
       this._expireTimeout = null;
+      this.events.emit('resume');
       return this;
     }
 

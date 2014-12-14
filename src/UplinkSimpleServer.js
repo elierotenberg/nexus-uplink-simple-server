@@ -6,6 +6,7 @@ const http = require('http');
 const EngineIO = require('engine.io');
 const instanceOfEngineIOSocket = require('./instanceOfEngineIOSocket');
 const JSONCache = require('./JSONCache');
+const EventEmitter = require('events').EventEmitter;
 
 let Connection, Session;
 
@@ -46,6 +47,7 @@ class UplinkSimpleServer {
     );
 
     _.extend(this, {
+      events: new EventEmitter(),
       _pid: pid,
       _stores: createConstantRouter(stores),
       _rooms: createConstantRouter(rooms),
@@ -165,13 +167,8 @@ class UplinkSimpleServer {
       handshakeTimeout: this._handshakeTimeout,
     });
     const handlers = {
-      close() {
-        this._handleDisconnection(socket.id);
-      }
-
-      handshake({ guid }) {
-        this._handleHanshake(socket.id, { guid });
-      }
+      close: () => this._handleDisconnection(socket.id),
+      handshake: ({ guid }) => this._handleHandshake(socket.id, { guid }),
     };
     Object.keys(handlers).forEach((event) => connection.events.addListener(event, handlers[event]));
     this._connections[socket.id] = { connection, handlers };
@@ -184,11 +181,122 @@ class UplinkSimpleServer {
     );
     const { connection, handlers } = this._connections[socketId];
     if(connection.isConnected) {
-      this._sessions[connection.guid].detachConnection(connection);
+      this._sessions[connection.guid].session.detachConnection(connection);
     }
+    connection.destroy();
     Object.keys(handlers).forEach((event) => connection.events.removeListener(event, handlers[event]));
     delete this._connections[socketId];
-    connection.destroy();
+  }
+
+  _handleHandshake(socketId, { guid }) {
+    _.dev(() => socketId.should.be.a.String &&
+      guid.should.be.a.String &&
+      (this._connections[socketId] !== void 0).should.be.ok
+    );
+    const { connection } = this._connections[socketId];
+    if(this._sessions[guid] === void 0) {
+      const session = new Session({ guid, activityTimeout: this._activityTimeout });
+      const handlers = {
+        expire: () => this._handleExpire(guid),
+        pause: () => this._handlePause(guid),
+        resume: () => this._handleResume(guid),
+        subscribeTo: (path) => this._handleSubscribeTo(guid, path),
+        unsubscribeFrom: (path) => this._handleUnsubscribeFrom(guid, path),
+        listenTo: (room) => this._handleListenTo(guid, room),
+        unlistenFrom: (room) => this._handleUnlistenFrom(guid, room),
+      };
+      this._sessions[guid] = { session, handlers };
+      Object.keys(handlers).forEach((event) => session.events.addListener(event, handlers[event]));
+      this.events.emit('create', { guid });
+    }
+    this._sessions[guid].session.attachConnection(connection);
+  }
+
+  _handleExpire(guid) {
+    _.dev(() => guid.should.be.a.String &&
+      (this._sessions[guid] !== void 0).should.be.ok
+    );
+    const { session, handlers } = this._sessions[guid];
+    session.destroy();
+    Object.keys(handlers).forEach((event) => session.events.removeListener(event, handlers[event]));
+    delete this._sessions[guid];
+    this.events.emit('delete', { guid });
+  }
+
+  _handlePause(guid) {
+    _.dev(() => guid.should.be.a.String &&
+      (this._sessions[guid] !== void 0).should.be.ok
+    );
+    this.events.emit('pause', guid);
+  }
+
+  _handleResume(guid) {
+    _.dev(() => guid.should.be.a.String &&
+      (this._sessions[guid] !== void 0).should.be.ok
+    );
+    this.events.emit('resume', guid);
+  }
+
+  _handleSubscribeTo(guid, path) {
+    _.dev(() => guid.should.be.a.String &&
+      path.should.be.a.String &&
+      (this._sessions[guid] !== void 0).should.be.ok
+    );
+    if(this._subscribers[path] === void 0) {
+      this._subscribers[path] = {};
+    }
+    if(this._subscribers[path][guid] === void 0) {
+      const { session } = this._sessions[guid];
+      this._subscribers[path][guid] = session;
+      this.events.emit('subscribeTo', { guid, path });
+    }
+  }
+
+  _handleUnsubscribeFrom(guid, path) {
+    _.dev(() => guid.should.be.a.String &&
+      path.should.be.a.String &&
+      (this._sessions[guid] !== void 0).should.be.ok
+    );
+    if(this._subscribers[path] !== void 0) {
+      if(this._subscribers[path][guid] !== void 0) {
+        delete this._subscribers[path][guid];
+        this.events.emit('unsubscribeFrom', { guid, path });
+      }
+      if(Object.keys(this._subscribers[path]).length === 0) {
+        delete this._subscribers[path];
+      }
+    }
+  }
+
+  _handleListenTo(guid, room) {
+    _.dev(() => guid.should.be.a.String &&
+      room.should.be.a.String &&
+      (this._sessions[guid] !== void 0).should.be.ok
+    );
+    if(this._listeners[path] === void 0) {
+      this._listeners[path] = {};
+    }
+    if(this._listeners[path][guid] === void 0) {
+      const { session } = this._sessions[guid];
+      this._listeners[path][guid] = session;
+      this.events.emit('listenTo', { guid, room });
+    }
+  }
+
+  _handleUnlistenFrom(guid, room) {
+    _.dev(() => guid.should.be.a.String &&
+      room.should.be.a.String &&
+      (this._sessions[guid] !== void 0).should.be.ok
+    );
+    if(this._listeners[room] !== void 0) {
+      if(this._listeners[room][guid] !== void 0) {
+        delete this._listeners[room][guid];
+        this.events.emit('unlistenFrom', { guid, path });
+      }
+      if(Object.keys(this._listeners[room]).length === 0) {
+        delete this._listeners[room];
+      }
+    }
   }
 
   _stringify(object) {
@@ -201,18 +309,12 @@ class UplinkSimpleServer {
       _.dev(() => path.should.be.a.String &&
         (this._stores.match(path) !== null).should.be.ok
       );
-      return this._storesCache[path];
+      const value = this._storesCache[path];
+      return value === void 0 ? null : value;
     });
   }
 
-  push(path, value) {
-    _.dev(() => path.should.be.a.String &&
-      (value === null || _.isObject(value)).should.be.ok
-    );
-    return this._update(path, value);
-  }
-
-  _update(path, value) {
+  update(path, value) {
     return Promise.try(() => {
       _.dev(() => path.should.be.a.String &&
         (value === null || _.isObject(value)).should.be.ok &&
@@ -220,7 +322,7 @@ class UplinkSimpleServer {
       );
       const previousValue = this._storesCache[path];
       this._storesCache[path] = value;
-      if(this._subscribers[path]) {
+      if(this._subscribers[path] !== void 0) {
         const [hash, diff] =
           (previousValue !== void 0 && previousValue !== null && value !== null) ?
           [_.hash(previousValue), _.diff(previousValue, value)] : [null, {}];
@@ -229,95 +331,16 @@ class UplinkSimpleServer {
     });
   }
 
-  subscribeTo(path, session) {
-    _.dev(() => path.should.be.a.String &&
-      session.should.be.an.instanceOf(Session)
-    );
-    let createdPath;
-    if(this.subscribers[path]) {
-      // Fail early to avoid creating leaky entry in this.subscribers
-      _.dev(() => (this.subscribers[path][session.id] === void 0).should.be.ok);
-      createdPath = false;
-    }
-    else {
-      this.subscribers[path] = {};
-      createdPath = true;
-    }
-    this.subscribers[path][session.id] = session;
-    // Return a flag indicating whether this is the first subscription
-    // to this path; can be useful to implement subclass-specific handling
-    // (eg. subscribe to an external backend)
-    return { createdPath };
-  }
-
-  unsubscribeFrom(path, session) {
-    _.dev(() => path.should.be.a.String &&
-      session.should.be.an.instanceOf(Session) &&
-      (this.subscribers[path] !== void 0).should.be.ok &&
-      this.subscribers[path].should.be.an.Object &&
-      (this.subscribers[path][session.id] !== void 0).should.be.ok &&
-      this.subscribers[path][session.id].should.be.exactly(session)
-    );
-    let deletedPath = false;
-    delete this.subscribers[path][session.id];
-    if(Object.keys(this.subscribers[path]).length === 0) {
-      delete this.subscribers[path];
-      deletedPath = true;
-    }
-    // Return a flag indicating whether this was the last subscription
-    // to this path; can be useful to implement subclass-specific handling
-    // (eg. unsbuscribe from an external backend)
-    return { deletedPath };
-  }
-
-  *emit(room, params) { // jshint ignore:line
-    _.dev(() => room.should.be.a.String &&
-      params.should.be.an.Object &&
-      (this.rooms.match(room) !== null).should.be.ok
-    );
-    if(this.listeners[room]) {
-      yield Object.keys(this.listeners[room]) // jshint ignore:line
-      .map((k) => this.listeners[room][k].emit({ room, params }));
-    }
-  }
-
-  listenTo(room, session) {
-    _.dev(() => room.should.be.a.String &&
-      session.should.be.an.instanceOf(Session)
-    );
-    let createdRoom;
-    if(this.listeners[room]) {
-      // Fail early to avoid creating a leaky entry in this.listeners
-      _.dev(() => (this.listeners[room][session.id] === void 0).should.be.ok);
-      createdRoom = false;
-    }
-    else {
-      this.listeners[room] = {};
-      createdRoom = true;
-    }
-    this.listeners[room][session.id] = session;
-    // Return a flag indicating whether this is the first listener
-    // to this room; can be useful to implement subclass-specific handling
-    // (e.g. subscribe to an external backend)
-    return { createdRoom };
-  }
-
-  unlistenTo(room, session) {
-    _.dev(() => room.should.be.a.String &&
-      session.should.be.an.instanceOf(Session) &&
-      (this.listeners[room] !== void 0).should.be.ok &&
-      this.listeners[room].should.be.exactly(session)
-    );
-    let deletedRoom = false;
-    delete this.listeners[room][session.id];
-    if(Object.keys(this.listeners[room]).length === 0) {
-      delete this.listeners[room];
-      deletedRoom = true;
-    }
-    // Return a flag indicating whether this was the last listener
-    // to this room; can be useful to implement subclass-specific handling
-    // (e.g. unsuscribe from an external backend)
-    return { deletedRoom };
+  emit(room, params) {
+    return Promise.try(() => {
+      _.dev(() => room.should.be.a.String &&
+        (params === null || _.isObject(params)).should.be.ok &&
+        (this._rooms.match(room) !== null).should.be.ok
+      );
+      if(this._listeners[room] !== void 0) {
+        return Promise.map(Object.keys(this._listeners[room]), (k) => this._listeners[room][k].emit({ room, params }));
+      }
+    });
   }
 
   addActionHandler(action, handler) {
@@ -405,6 +428,7 @@ class UplinkSimpleServer {
 }
 
 _.extend(UplinkSimpleServer.prototype, {
+  events: null,
   stores: null,
   rooms: null,
   actions: null,
