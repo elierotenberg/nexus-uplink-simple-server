@@ -1,132 +1,160 @@
 module.exports = function({ Connection, UplinkSimpleServer }) {
   const _ = require('lodash-next');
+  const EventEmitter = require('event').EventEmitter;
+
+  const DEFAULT_ACTIVITY_TIMEOUT = 10000;
+
+  const actions = ['subscribeTo', 'unsubscribeFrom', 'listenTo', 'unlistenFrom'];
 
   class Session {
-    constructor({ guid, uplink, timeout }) {
+    constructor({ guid, activityTimeout }) {
+      activityTimeout = activityTimeout || DEFAULT_ACTIVITY_TIMEOUT;
       _.dev(() => guid.should.be.a.String &&
-        uplink.should.be.an.instanceOf(UplinkSimpleServer) &&
-        timeout.should.be.a.Number.and.not.be.below(0)
+        activityTimeout.should.be.a.Number.and.not.be.below(0)
       );
-      _.extend(this, { guid, uplink });
-      this.connections = {};
-
-      this.subscriptions = {};
-      this.listeners = {};
-
-      this.timeout = timeout;
-      this._timeout = null;
-      this.expired = false;
+      _.extend(this, {
+        events: new EventEmitter(),
+        _guid: guid,
+        _activityTimeout: activityTimeout,
+        _connections: {},
+        _subscriptions: {},
+        _listeners: {},
+        _expireTimeout: null,
+      });
+      this._isDestroyed = false;
       this.pause();
+      actions.forEach((action) => this[`_${action}`] = _.scope(this[`_${action}`], this));
     }
 
     destroy() {
-      if(this.timeout !== null) {
-        clearTimeout(this.timeout);
+      if(this._expireTimeout !== null) {
+        clearTimeout(this._expireTimeout);
+        this._expireTimeout = null;
       }
-      Object.keys(this.connections).forEach((id) => this.detach(this.connections[id]));
-      Object.keys(this.subscriptions).forEach((path) => this.unsubscribeFrom(path));
-      Object.keys(this.listeners).forEach((room) => this.unlistenFrom(room));
+      Object.keys(this._connections).forEach((id) => this.detachConnection(this._connections[id]));
+      this._connections = null;
+      Object.keys(this._subscriptions).forEach(this._unsubscribeFrom);
+      this._subscriptions = null;
+      Object.keys(this._listeners).forEach(this._unlistenFrom);
+      this._listeners = null;
+      this.events.emit('destroy');
+      this.events.removeAllListeners();
+      this.events = null;
     }
 
-    get paused() {
-      return (this._timeout !== null);
+    get guid() {
+      return this._guid;
+    }
+
+    get isPaused() {
+      return (this._expireTimeout !== null);
     }
 
     // Just proxy the invocation to all attached connections, which implement the same APIs.
     proxy(method) {
       return _.scope(function(...args) {
-        return Object.keys(this.connections).map((id) => this.connections[id][method](...args));
+        return Object.keys(this._connections).map((id) => this.connections[id][method](...args));
       }, this);
     }
 
-    attach(connection) {
+    attachConnection(connection) {
       _.dev(() => connection.should.be.an.instanceOf(Connection) &&
-        (this.connections[connection.id] === void 0).should.be.ok
+        (this._connections[connection.id] === void 0).should.be.ok
       );
-      this.connections[connection.id] = connection;
-      // If the session was paused (no connec attached)
-      // then resume it
-      if(this.paused) {
+      this._connections[connection.id] = connection;
+      actions.forEach((action) => connection.addListener(action, this[`_${action}`]));
+      if(this.isPaused) {
         this.resume();
       }
       return this;
     }
 
-    expire() {
-      this.expired = true;
-      _.dev(() => console.warn('nexus-uplink-simple-server', '!!', 'expire', this.guid));
-      return this.uplink.deleteSession(this);
-    }
-
-    pause() {
-      _.dev(() => this.paused.should.not.be.ok);
-      _.dev(() => console.warn('nexus-uplink-simple-server', '!!', 'pause', this.guid));
-      this._timeout = setTimeout(() => this.expire(), this.timeout);
-      return this;
-    }
-
-
-    resume() {
-      _.dev(() => this.paused.should.be.ok);
-      _.dev(() => console.warn('nexus-uplink-simple-server', '!!', 'resume', this.guid));
-      // Prevent the expiration timeout
-      clearTimeout(this._timeout);
-      this._timeout = null;
-      return this;
-    }
-
-    detach(connection) {
+    detachConnection(connection) {
       _.dev(() => connection.should.be.an.instanceOf(Connection) &&
-        (this.connections[connection.id] !== void 0).should.be.ok &&
-        this.connections[connection.id].should.be.exactly(connection)
+        (this._connections[connection.id] !== void 0).should.be.ok &&
+        this._connections[connection.id].should.be.exactly(connection)
       );
-      delete this.connections[connection.id];
-      // If this was the last connection, pause the session
-      // and start the expire countdown
-      if(Object.keys(this.connections).length === 0) {
+      delete this._connections[connection.id];
+      actions.forEach((action) => connection.removeListener(action, this[`_${action}`]));
+      if(Object.keys(this._connections).length === 0) {
         this.pause();
       }
       return this;
     }
 
+    pause() {
+      this.isPaused.should.not.be.ok;
+      _.dev(() => Object.keys(this._connections).length.should.be.exactly(0));
+      this._expireTimeout = setTimeout(() => this._handleExpire(), this._activityTimeout);
+      return this;
+    }
+
+    resume() {
+      this.isPaused.should.be.ok;
+      _.dev(() => Object.keys(this._connections).length.should.be.above(0));
+      clearTimeout(this._expireTimeout);
+      this._expireTimeout = null;
+      return this;
+    }
+
+    _handleExpire() {
+      this.events.emit('expire');
+    }
+
     update({ path, diff, hash }) {
-      return this.proxy('update')({ path, diff, hash });
-    }
-
-    subscribeTo(path) {
-      _.dev(() => path.should.be.a.String &&
-        (this.subscriptions[path] === void 0).should.be.ok
-      );
-      this.subscriptions[path] = true;
-      return this.uplink.subscribeTo(path, this);
-    }
-
-    unsubscribeFrom(path) {
-      _.dev(() => path.should.be.a.String &&
-        (this.subscriptions[path] !== void 0).should.be.ok
-      );
-      delete this.subscriptions[path];
-      return this.uplink.unsubscribeFrom(path, this);
+      _.dev(() => path.should.be.a.String);
+      if(this._subscriptions[path] !== void 0) {
+        this.proxy('update')({ path, diff, hash });
+      }
+      return this;
     }
 
     emit({ room, params }) {
-      return this.proxy('emit')({ room, params });
+      _.dev(() => room.should.be.a.String &&
+        (params === null || _.isObject(params)).should.be.ok
+      );
+      if(this._listeners[room] !== void 0) {
+        this.proxy('emit')({ room, params });
+      }
+      return this;
     }
 
-    listenTo(room) {
-      _.dev(() => room.should.be.a.String &&
-        (this.listeners[room] === void 0).should.be.ok
-      );
-      this.listeners[room] = true;
-      return this.uplink.listenTo(room, this);
+    _subscribeTo(path) {
+      _.dev(() => path.should.be.a.String);
+      if(this._subscriptions[path] !== void 0) {
+        return this;
+      }
+      this._subscriptions[path] = true;
+      this.events.emit('subscribeTo', path);
+      return this;
     }
 
-    unlistenFrom(room) {
-      _.dev(() => room.should.be.a.String &&
-        (this.listeners[room] !== void 0).should.be.ok
+    _unsubscribeFrom(path) {
+      _.dev(() => path.should.be.a.String &&
+        (this._subscriptions[path] !== void 0).should.be.ok
       );
-      delete this.listeners[room];
-      return this.uplink.unlistenFrom(room, this);
+      delete this._subscriptions[path];
+      this.events.emit('unsubscribeFrom', path);
+      return this;
+    }
+
+    _listenTo(room) {
+      _.dev(() => room.should.be.a.String);
+      if(this._listeners[room] !== void 0) {
+        return this;
+      }
+      this._listeners[room] = true;
+      this.events.emit('listenTo', room);
+      return this;
+    }
+
+    _unlistenFrom(room) {
+      _.dev(() => room.should.be.a.String &&
+        (this._listeners[room] !== void 0).should.be.ok
+      );
+      delete this._listeners[room];
+      this.events.emit('unlistenFrom', room);
+      return this;
     }
 
     debug(...args) {
@@ -147,14 +175,13 @@ module.exports = function({ Connection, UplinkSimpleServer }) {
   }
 
   _.extend(Session.prototype, {
-    guid: null,
-    uplink: null,
-    connections: null,
-    timeout: null,
-    _timeout: null,
-    expired: null,
-    subscriptions: null,
-    listeners: null,
+    events: null,
+    _guid: null,
+    _activityTimeout: null,
+    _connections: null,
+    _subscriptions: null,
+    _listeners: null,
+    _expireTimeout: null,
   });
 
   return Session;

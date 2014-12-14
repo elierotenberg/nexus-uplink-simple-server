@@ -9,8 +9,15 @@ const JSONCache = require('./JSONCache');
 
 let Connection, Session;
 
-const DEFAULT_EXPIRE_TIMEOUT = 10000;
-const DEFAULT_JSONCACHE_SIZE = 10000;
+const DEFAULT_JSON_CACHE_MAX_SIZE = 10000;
+const DEFAULT_HANDSHAKE_TIMEOUT = 5000;
+const DEFAULT_ACTIVITY_TIMEOUT = 10000;
+
+// Here we use ConstantRouter instances; we only need
+// to know if a given string match a registered pattern.
+function createConstantRouter(t) {
+  return new ConstantRouter(_.object(t.map((v) => [v, v])));
+}
 
 // Most public methods expose an async API
 // to enforce consistence with async data backends,
@@ -21,38 +28,41 @@ class UplinkSimpleServer {
   // stores, rooms, and actions are three whitelists of
   // string patterns. Each is an array that will be passed
   // to the Router constructor.
-  constructor({ pid, stores, rooms, actions, app, timeout, jsonCache }) {
-    timeout = timeout || DEFAULT_EXPIRE_TIMEOUT;
-    jsonCache = jsonCache || {};
-    _.dev(() => (pid !== undefined).should.be.ok &&
+  constructor({ pid, stores, rooms, actions, app, jsonCacheMaxSize, handshakeTimeout, activityTimeout }) {
+    jsonCacheMaxSize = jsonCacheMaxSize === void 0 ? DEFAULT_JSONCACHE_SIZE : jsonCacheMaxSize;
+    handshakeTimeout = handshakeTimeout === void 0 ? DEFAULT_HANDSHAKE_TIMEOUT : handshakeTimeout;
+    activityTimeout = activityTimeout === void 0 ? DEFAULT_ACTIVITY_TIMEOUT : activityTimeout;
+    _.dev(() => (pid !== void 0).should.be.ok &&
       stores.should.be.an.Array &&
       rooms.should.be.an.Array &&
       actions.should.be.an.Array &&
       // Ducktype-check for an express-like app
       app.get.should.be.a.Function &&
       app.post.should.be.a.Function &&
-      timeout.should.be.a.Number.and.not.be.below(0) &&
-      jsonCache.should.be.an.Object
+      // Other typechecks
+      jsonCacheMaxSize.should.be.a.Number.and.not.be.below(0) &&
+      handshakeTimeout.should.be.a.Number.and.not.be.below(0) &&
+      activityTimeout.should.be.a.Number.and.not.be.below(0)
     );
-    jsonCache.maxSize = jsonCache.maxSize || DEFAULT_JSONCACHE_SIZE;
-    _.dev(() => jsonCache.maxSize.should.be.a.Number.not.below(0));
-    this.pid = pid;
-    // Here we use ConstantRouter instances; we only need
-    // to know if a given string match a registered pattern.
-    const createConstantRouter = (t) => new ConstantRouter(_.object(t.map((v) => [v, v])));
-    this.stores = createConstantRouter(stores);
-    this.rooms = createConstantRouter(rooms);
-    this.actions = createConstantRouter(actions);
-    this.app = app;
-    this.timeout = timeout;
-    this.server = http.Server(app);
-    this.io = EngineIO.Server();
 
-    // JSON Encoding cache
-    this.jsonCache = new JSONCache(jsonCache);
-
-    // Store data cache
-    this._data = {};
+    _.extend(this, {
+      _pid: pid,
+      _stores: createConstantRouter(stores),
+      _rooms: createConstantRouter(rooms),
+      _actions: createConstantRouter(actions),
+      _storesCache: {},
+      _jsonCache: new JSONCache({ maxSize: jsonCacheMaxSize }),
+      _handshakeTimeout: handshakeTimeout,
+      _activityTimeout: activityTimeout,
+      _app: app,
+      _server: http.Server(app),
+      _io: EngineIO.Server(),
+      _connections: {},
+      _sessions: {},
+      _subscribers: {},
+      _listeners: {},
+      _actionHandlers: {},
+    });
 
     // Connections represent actual living socket.io connections.
     // Session represent a remote Uplink client instance, with a unique guid.
@@ -62,148 +72,161 @@ class UplinkSimpleServer {
     // Uplink frames are received from and sent to sessions, not connection.
     // Each session must keep references to its attached connections and propagate
     // relevant frames accordingly.
-    this.connections = {};
-    this.sessions = {};
-
-    this.subscribers = {};
-    this.listeners = {};
-    this.actionHandlers = {};
   }
 
   listen(port, fn = _.noop) {
     _.dev(() => port.should.be.a.Number);
 
-    this.bindIOHandlers();
-    this.bindHTTPHandlers();
+    this._bindIOHandlers();
+    this._bindHTTPHandlers();
 
     // Attach the EngineIO handlers first
-    this.server.listen(port, fn);
+    this._server.listen(port, fn);
     return this;
   }
 
-  bindIOHandlers() {
-    this.io.attach(this.server);
-    this.io.on('connection', (socket) => this.handleConnection(socket));
+  _bindIOHandlers() {
+    this._io.attach(this.server);
+    this._io.on('connection', (socket) => this._handleConnection(socket));
   }
 
-  bindHTTPHandlers() {
-    // Fetch from store
-    this.app.get('*',
-      // Check that this store path is whitelisted
-      (req, res, next) => this.stores.match(req.path) === null ? HTTPExceptions.forward(res, new HTTPExceptions.NotFound(req.path)) : next(),
-      (req, res) => this.pull(req.path)
-        .then((value) => {
-          _.dev(() => (value === null || _.isObject(value)).should.be.ok);
-          _.dev(() => console.warn(`GET ${req.path}`, value));
-          res.status(200).type('application/json').send(value);
-        })
-        .catch((e) => {
-          _.dev(() => console.warn(`GET ${req.path}`, e, e.stack));
-          if(e instanceof HTTPExceptions.HTTPError) {
-            HTTPExceptions.forward(res, e);
-          }
-          else {
-            let json = { err: e.toString() };
-            _.dev(() => json.stack = e.stack);
-            res.status(500).json(json);
-          }
-        })
-    );
+  _handleGET(req, res) {
+    Promise.try(() => {
+      _.dev(() => console.warn('nexus-uplink-simple-server', '<<', 'GET', req.path));
+      if(this._stores.match(req.path) === null) {
+        throw new HTTPExceptions.NotFound(req.path);
+      }
+      return this._pull(req.path)
+      .then((value) => {
+        _.dev(() => (value === null || _.isObject(value)).should.be.ok);
+        _.dev(() => console.warn('nexus-uplink-simple-server', '>>', 'GET', req.path, value));
+        res.status(200).type('application/json').send(value);
+      });
+    })
+    .catch((err) => {
+      _.dev(() => console.warn('nexus-uplink-simple-server', '>>', 'GET', req.path, err));
+      if(err instanceof HTTPExceptions.HTTPError) {
+        return HTTPExceptions.forward(res, err);
+      }
+      const json = { err: err.toString() };
+      _.dev(() => json.stack = err.stack);
+      res.status(500).json(json);
+    });
+  }
 
-    // Dispatch action
-    this.app.post('*',
-      // Parse body as JSON
-      bodyParser.json(),
-      // Check that this action path is whitelisted
-      (req, res, next) => this.actions.match(req.path) === null ? HTTPExceptions.forward(res, new HTTPExceptions.NotFound(req.path)) : next(),
-      // params should be present
-      (req, res, next) => !_.isObject(req.body.params) ? HTTPExceptions.forward(res, new HTTPExceptions.BadRequest('Missing required field: \'param\'')) : next(),
-      // Check for a valid, active session guid in params
-      (req, res, next) => !req.body.params.guid ? HTTPExceptions.forward(res, new HTTPExceptions.Unauthorized('Missing required field: \'params\'.\'guid\'')) : next(),
-      (req, res, next) => !this.isActiveSession(req.body.params.guid) ? HTTPExceptions.forward(res, HTTPExceptions.Unauthorized('Invalid \'guid\'.')) : next(),
-      (req, res) => this.dispatch(req.path, req.body.params)
+  _handlePOST(req, res) {
+    Promise.try(() => {
+      _.dev(() => console.warn('nexus-uplink-simple-server', '<<', 'POST', req.path, req.body));
+      if(this._actions.match(req.path) === null) {
+        throw new HTTPExceptions.NotFound(req.path);
+      }
+      if(req.body.params === void 0) {
+        throw new HTTPExceptions.BadRequest(`Missing required field: 'params'.`);
+      }
+      if(!_.isObject(req.body.params)) {
+        throw new HTTPExceptions.BadRequest(`Field 'params' should be an Object.`);
+      }
+      if(req.body.params.guid === void 0) {
+        throw new HTTPExceptions.BadRequest(`Missing required field: 'params'.'guid'.`);
+      }
+      if(!this.isActiveSession(req.body.params.guid)) {
+        throw new HTTPExceptions.Unauthorized(`Invalid guid: ${req.body.params.guid}`);
+      }
+      return this._dispatch(req.path, req.body.params)
       .then((result) => {
-        _.dev(() => console.warn(`POST ${req.path}`, req.body, result));
+        _.dev(() => console.warn('nexus-uplink-simple-server', '>>', 'POST', req.path, req.body, result));
         res.status(200).json(result);
-      })
-      .catch((e) => {
-          _.dev(() => console.warn(`POST ${req.path}`, req.body, e));
-          if(e instanceof HTTPExceptions.HTTPError) {
-            HTTPExceptions.forward(res, e);
-          }
-          else {
-            res.status(500).json({ err: e.toString() });
-          }
-      })
-    );
-
+      });
+    })
+    .catch((err) => {
+      _.dev(() => console.warn('nexus-uplink-simple-server', '>>', 'POST', req.path, req.body, err));
+      if(err instanceof HTTPExceptions.HTTPError) {
+        return HTTPExceptions.forward(res, err);
+      }
+      const json = { err: err.toString() };
+      _.dev(() => json.stack = err.stack);
+      res.status(500).json(json);
+    });
   }
 
-  handleConnection(socket) {
+  _bindHTTPHandlers() {
+    this._app.get('*', (req, res) => this._handleGET(req, res));
+    this._app.post('*', bodyParser.json(), (req, res) => this._handlePOST(req, res));
+  }
+
+  _handleConnection(socket) {
     _.dev(() => console.warn('nexus-uplink-simple-server', '<<', 'connection', socket.id));
     _.dev(() => instanceOfEngineIOSocket(socket).should.be.ok &&
-      (this.connections[socket.id] === void 0).should.be.ok
+      (this._connections[socket.id] === void 0).should.be.ok
     );
-    this.connections[socket.id] = new Connection({ socket, uplink: this });
-    socket.on('close', (reason, desc) => this.handleDisconnection(socket, reason, desc));
+    const connection = new Connection({
+      socket,
+      stringify: (obj) => this._stringify(obj),
+      handshakeTimeout: this._handshakeTimeout,
+    });
+    const handlers = {
+      close() {
+        this._handleDisconnection(socket.id);
+      }
+
+      handshake({ guid }) {
+        this._handleHanshake(socket.id, { guid });
+      }
+    };
+    Object.keys(handlers).forEach((event) => connection.events.addListener(event, handlers[event]));
+    this._connections[socket.id] = { connection, handlers };
   }
 
-  handleDisconnection(socket, reason, desc) {
-    _.dev(() => console.warn('nexus-uplink-simple-server', '<<', 'disconnection', socket.id, { reason, desc }));
-    _.dev(() => instanceOfEngineIOSocket(socket).should.be.ok &&
-      (this.connections[socket.id] !== void 0).should.be.ok &&
-      (this.connections[socket.id].socket !== void 0).should.be.ok &&
-      this.connections[socket.id].socket.should.be.exactly(socket)
+  _handleDisconnection(socketId) {
+    _.dev(() => socketId.should.be.a.String &&
+      (this._connections[socketId] !== void 0).should.be.ok &&
+      this._connections[socketId].connection.id.should.be.exactly(socketId)
     );
-    this.connections[socket.id].destroy();
-    delete this.connections[socket.id];
+    const { connection, handlers } = this._connections[socketId];
+    if(connection.isConnected) {
+      this._sessions[connection.guid].detachConnection(connection);
+    }
+    Object.keys(handlers).forEach((event) => connection.events.removeListener(event, handlers[event]));
+    delete this._connections[socketId];
+    connection.destroy();
   }
 
-  stringify(object) {
+  _stringify(object) {
     _.dev(() => object.should.be.an.Object);
-    return this.jsonCache.stringify(object);
+    return this._jsonCache.stringify(object);
   }
 
   pull(path) {
     return Promise.try(() => {
       _.dev(() => path.should.be.a.String &&
-        (this.stores.match(path) !== null).should.be.ok
+        (this._stores.match(path) !== null).should.be.ok
       );
-      return this._data[path];
+      return this._storesCache[path];
     });
   }
 
-  *push(path, value) { // jshint ignore:line
-    return yield this.update(path, value); // jshint ignore:line
+  push(path, value) {
+    _.dev(() => path.should.be.a.String &&
+      (value === null || _.isObject(value)).should.be.ok
+    );
+    return this._update(path, value);
   }
 
-  *update(path, value) { // jshint ignore:line
-    _.dev(() => path.should.be.a.String &&
-      value.should.be.an.Object &&
-      (this.stores.match(path) !== null).should.be.ok
-    );
-    if(this.subscribers[path]) {
-      let hash, diff;
-      // Diff and hash as early as possible to avoid duplicating
-      // these lengthy calculations down the propagation tree.
-      // If no value was present before, then nullify the hash. No value has a null hash.
-      if(!this._data[path]) {
-        hash = null;
+  _update(path, value) {
+    return Promise.try(() => {
+      _.dev(() => path.should.be.a.String &&
+        (value === null || _.isObject(value)).should.be.ok &&
+        (this._stores.match(path) !== null).should.be.ok
+      );
+      const previousValue = this._storesCache[path];
+      this._storesCache[path] = value;
+      if(this._subscribers[path]) {
+        const [hash, diff] =
+          (previousValue !== void 0 && previousValue !== null && value !== null) ?
+          [_.hash(previousValue), _.diff(previousValue, value)] : [null, {}];
+        return Promise.map(Object.keys(this._subscribers[path]), (k) => this._subscribers[path][k].update({ path, diff, hash }));
       }
-      else {
-        hash = _.hash(this._data[path]);
-        diff = _.diff(this._data[path], value);
-      }
-      this._data[path] = value;
-      // Directly pass the patch, sessions don't need to be aware
-      // of the actual contents; they only need to forward the diff
-      // to their associated clients.
-      yield Object.keys(this.subscribers[path]) // jshint ignore:line
-      .map((k) => this.subscribers[path][k].update({ path, hash, diff }));
-    }
-    else {
-      this._data[path] = value;
-    }
+    });
   }
 
   subscribeTo(path, session) {

@@ -1,39 +1,31 @@
 module.exports = function({ UplinkSimpleServer }) {
   const _ = require('lodash-next');
   const instanceOfEngineIOSocket = require('./instanceOfEngineIOSocket');
+  const EventEmitter = require('events').EventEmitter;
 
   const HANDSHAKE_TIMEOUT = 5000;
 
   class Connection {
-    constructor({ socket, uplink }) {
+    constructor({ socket, stringify, handshakeTimeout }) {
+      handshakeTimeout = handshakeTimeout || HANDSHAKE_TIMEOUT;
       _.dev(() => instanceOfEngineIOSocket(socket).should.be.ok &&
-        uplink.should.be.an.instanceOf(UplinkSimpleServer)
+        stringify.should.be.a.Function &&
+        handshakeTimeout.should.be.a.Number.and.not.be.below(0)
       );
-      this._handshake = new Promise((resolve, reject) => {
-        this._handshakeResolve = resolve;
-        this._handshakeReject = reject;
-      })
-      .timeout(HANDSHAKE_TIMEOUT)
-      .cancellable();
       _.extend(this, {
+        events: new EventEmitter(),
         _isDestroyed: false,
         _isConnected: false,
         _guid: null,
         _session: null,
-        socket,
-        uplink,
+        _socket: socket,
+        _stringify: stringify,
       });
-      socket.on('error', (err) => this.handleError(err));
-      socket.on('message', (json) => this.handleMessage(json));
-
-      [
-        'handleMessageHanshake',
-        'handleMessageSubscribeTo',
-        'handleMessageUnsubscribeFrom',
-        'handleMessageListenTo',
-        'handleMessageUnlistenFrom',
-      ].forEach((method) => this[method] = Promise.coroutine(this[method]));
-
+      this._handshakeTimeout = setTimeout(() => this._handshakeTimeoutExpire(), handshakeTimeout);
+      ['_handleClose', '_handleError', '_handleMessage'].forEach((method) => this[method] = _.scope(this[method], this));
+      this._socket.addListener('close', this._handleClose;
+      this._socket.addListener('error', this._handleError);
+      this._socket.addListener('message', this._handleMessage);
     }
 
     get isDestroyed()  {
@@ -48,100 +40,24 @@ module.exports = function({ UplinkSimpleServer }) {
       return this.socket.id;
     }
 
-    handleError(err) {
-      _.dev(() => console.error('nexus-uplink-simple-server', this.socket.id, '<<', err.toString()));
-    }
-
-    handleMessage(json) {
-      _.dev(() => json.should.be.a.String);
-      return Promise.try(() => {
-        const { event, params } = JSON.parse(json);
-        event.should.be.a.String;
-        (params === null || _.isObject(params)).should.be.ok;
-        if(event === 'handshake') {
-          return this.handleMessageHanshake(params);
-        }
-        if(event === 'subscribeTo') {
-          return this.handleMessageSubscribeTo(params);
-        }
-        if(event === 'unsubscribeFrom') {
-          return this.handleMessageUnsubscribeFrom(params);
-        }
-        if(event === 'listenTo') {
-          return this.handleMessageListenTo(params);
-        }
-        if(event === 'unlistenFrom') {
-          return this.handleMessageUnlistenFrom(params);
-        }
-        throw new Error(`Unknown event type: ${event}`);
-      }).catch((err) => this.throw(err));
-    }
-
-    *handleMessageHanshake({ guid }) { // jshint ignore:line
-      this.isConnected.should.not.be.ok;
-      guid.should.be.a.String;
-      const session = yield this.uplink.getSession(guid); // jshint ignore:line
-      // Check that we are still not connected (since yield is async)
-      this.isConnected.should.not.be.ok;
-      session.attach(this);
-      this._isConnected = true;
-      this._guid = guid;
-      this._session = session;
-      this._handshakeResolve(session);
-      this.handshakeAck({ pid: this.uplink.pid });
-    }
-
-    *handleMessageSubscribeTo({ path }) { // jshint ignore:line
-      path.should.be.a.String;
-      const session = yield this._handshake; // jshint ignore:line
-      session.subscribeTo(path);
-    }
-
-    *handleMessageUnsubscribeFrom({ path }) { // jshint ignore:line
-      path.should.be.a.String;
-      const session = yield this._handshake; // jshint ignore:line
-      session.unsubscribeFrom(path);
-    }
-
-    *handleMessageListenTo({ room }) { // jshint ignore:line
-      room.should.be.a.String;
-      const session = yield this._handshake; // jshint ignore:line
-      session.listenTo(room);
-    }
-
-    *handleMessageUnlistenFrom({ room }) { // jshint ignore:line
-      room.should.be.a.String;
-      const session = yield this._handshake; // jshint ignore:line
-      session.unlistenFrom(room);
-    }
-
-    throw(err) {
-      this.push('err', { err: err.toString(), stack: __DEV__ ? err.stack : void 0 });
-    }
-
     push(event, params) {
+      this.isDestroyed.should.not.be.ok;
       _.dev(() => event.should.be.a.String &&
-        (params === null || _.isObject(params)).should.be.ok &&
-        this.isDestroyed.should.not.be.ok
+        (params === null || _.isObject(params)).should.be.ok
       );
-      _.dev(() => console.warn('nexus-uplink-simple-server', this.socket.id, '>>', event, params));
-      const message = { event, params };
-      const json = this.uplink.stringify(message);
-      this.socket.send(json);
+      _.dev(() => console.warn('nexus-uplink-simple-server', this._socket.id, '>>', event, params));
+      this._socket.send(this._stringify({ event, params }));
     }
 
     destroy() {
-      _.dev(() => this.isDestroyed.should.not.be.ok);
-      if(this._session) {
-        this._session.detach(this);
-      }
-      this._handshake.cancel(new Error('Connection destroyed'));
-      _.dev(() => console.warn('nexus-uplink-simple-server', this.socket.id, '!!', 'destroy'));
-    }
-
-    handshakeAck({ pid }) {
-      _.dev(() => pid.should.be.a.String);
-      this.push('handshakeAck', { pid });
+      this.isDestroyed.should.not.be.ok;
+      _.dev(() => console.warn('nexus-uplink-simple-server', this._socket.id, '!!', 'destroy'));
+      this.events.removeAllListeners();
+      this.events = null;
+      this._socket.removeListener('close', this._handleClose);
+      this._socket.removeListener('error', this._handleError);
+      this._socket.removeListener('message', this._handleMessage);
+      this._socket = null;
     }
 
     update({ path, diff, hash }) {
@@ -174,18 +90,90 @@ module.exports = function({ UplinkSimpleServer }) {
     err(...args) {
       this.push('err', ...args);
     }
+
+    _handleClose() {
+      this.events.emit('close');
+    }
+
+    _handleError(err) {
+      _.dev(() => console.error('nexus-uplink-simple-server', this._socket.id, '<<', err.toString()));
+    }
+
+    _handleMessage(json) {
+      _.dev(() => console.warn('nexus-uplink-simple-server', this._socket.id, '<<', json));
+      _.dev(() => json.should.be.a.String);
+      return Promise.try(() => {
+        const { event, params } = JSON.parse(json);
+        event.should.be.a.String;
+        (params === null || _.isObject(params)).should.be.ok;
+        if(event === 'handshake') {
+          return this._handleMessageHanshake(params);
+        }
+        if(event === 'subscribeTo') {
+          return this._handleMessageSubscribeTo(params);
+        }
+        if(event === 'unsubscribeFrom') {
+          return this._handleMessageUnsubscribeFrom(params);
+        }
+        if(event === 'listenTo') {
+          return this._handleMessageListenTo(params);
+        }
+        if(event === 'unlistenFrom') {
+          return this._handleMessageUnlistenFrom(params);
+        }
+        throw new Error(`Unknown event type: ${event}`);
+      }).catch((err) => this._throw(err));
+    }
+
+    _handleMessageHanshake({ guid }) {
+      this.isConnected.should.not.be.ok;
+      guid.should.be.a.String;
+      this._isConnected = true;
+      this.events.emit('handshake', { guid });
+      this._handshakeAck({ pid: this.uplink.pid });
+    }
+
+    _handleMessageSubscribeTo({ path }) {
+      path.should.be.a.String;
+      this.isConnected.should.be.ok;
+      this.events.emit('subscribeTo', { path });
+    }
+
+    _handleMessageUnsubscribeFrom({ path }) {
+      path.should.be.a.String;
+      this.isConnected.should.be.ok;
+      this.events.emit('unsubscribeFrom', { path });
+    }
+
+    _handleMessageListenTo({ room }) {
+      room.should.be.a.String;
+      this.isConnected.should.be.ok;
+      this.events.emit('listenTo', { room });
+    }
+
+    _handleMessageUnlistenFrom({ room }) {
+      room.should.be.a.String;
+      this.isConnected.should.be.ok;
+      this.events.emit('unlistenFrom', { room });
+    }
+
+    _throw(err) {
+      this.push('err', { err: err.toString(), stack: __DEV__ ? err.stack : void 0 });
+    }
+
+    _handshakeAck({ pid }) {
+      _.dev(() => pid.should.be.a.String);
+      this.push('handshakeAck', { pid });
+    }
   }
 
   _.extend(Connection.prototype, {
+    events: null,
     _isDestroyed: null,
     _isConnected: null,
-    _guid: null,
-    _session: null,
-    socket: null,
-    uplink: null,
-    _handshake: null,
-    _handshakeResolve: null,
-    _handshakeReject: null,
+    _handshakeTimeout: null,
+    _socket: null,
+    _stringify: null,
   });
 
   return Connection;
