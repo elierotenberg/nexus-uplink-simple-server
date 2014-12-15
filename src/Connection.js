@@ -62,12 +62,9 @@ class Connection {
       clearTimeout(this._handshakeTimeout);
       this._handshakeTimeout = null;
     }
-    this.events.removeAllListeners();
-    this.events = null;
     this._socket.removeListener('close', this._handleClose);
     this._socket.removeListener('error', this._handleError);
     this._socket.removeListener('message', this._handleMessage);
-    this._socket = null;
   }
 
   update({ path, diff, hash }) {

@@ -36,10 +36,7 @@ module.exports = function({ Connection }) {
       Object.keys(this._subscriptions).forEach((path) => this._unsubscribeFrom({ path }));
       this._subscriptions = null;
       Object.keys(this._listeners).forEach((room) => this._unlistenFrom({ room }));
-      this._listeners = null;
       this.events.emit('destroy');
-      this.events.removeAllListeners();
-      this.events = null;
     }
 
     get guid() {

@@ -60,10 +60,7 @@ require("6to5/polyfill");var Promise = (global || window).Promise = require("lod
       Object.keys(this._listeners).forEach(function (room) {
         return _this2._unlistenFrom({ room: room });
       });
-      this._listeners = null;
       this.events.emit("destroy");
-      this.events.removeAllListeners();
-      this.events = null;
     };
 
     Session.prototype.proxy = function (method) {

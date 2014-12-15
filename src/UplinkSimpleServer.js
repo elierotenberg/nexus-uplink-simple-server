@@ -268,9 +268,9 @@ class UplinkSimpleServer {
       (this._sessions[guid] !== void 0).should.be.ok
     );
     const { session, handlers } = this._sessions[guid];
+    session.destroy();
     Object.keys(handlers).forEach((event) => session.events.removeListener(event, handlers[event]));
     delete this._sessions[guid];
-    session.destroy();
     this.events.emit('delete', { guid });
   }
 
