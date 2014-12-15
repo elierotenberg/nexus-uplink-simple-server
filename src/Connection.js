@@ -37,7 +37,7 @@ class Connection {
   }
 
   get id() {
-    return this.socket.id;
+    return this._socket.id;
   }
 
   push(event, params) {

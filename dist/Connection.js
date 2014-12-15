@@ -224,7 +224,7 @@ var Connection = (function () {
     },
     id: {
       get: function () {
-        return this.socket.id;
+        return this._socket.id;
       }
     }
   });
