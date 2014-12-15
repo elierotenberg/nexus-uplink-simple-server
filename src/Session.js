@@ -137,41 +137,41 @@ module.exports = function({ Connection }) {
       this.events.emit('expire');
     }
 
-    _subscribeTo(path) {
+    _subscribeTo({ path }) {
       _.dev(() => path.should.be.a.String);
       if(this._subscriptions[path] !== void 0) {
         return this;
       }
       this._subscriptions[path] = true;
-      this.events.emit('subscribeTo', path);
+      this.events.emit('subscribeTo', { path });
       return this;
     }
 
-    _unsubscribeFrom(path) {
+    _unsubscribeFrom({ path }) {
       _.dev(() => path.should.be.a.String &&
         (this._subscriptions[path] !== void 0).should.be.ok
       );
       delete this._subscriptions[path];
-      this.events.emit('unsubscribeFrom', path);
+      this.events.emit('unsubscribeFrom', { path });
       return this;
     }
 
-    _listenTo(room) {
+    _listenTo({ room }) {
       _.dev(() => room.should.be.a.String);
       if(this._listeners[room] !== void 0) {
         return this;
       }
       this._listeners[room] = true;
-      this.events.emit('listenTo', room);
+      this.events.emit('listenTo', { room });
       return this;
     }
 
-    _unlistenFrom(room) {
+    _unlistenFrom({ room }) {
       _.dev(() => room.should.be.a.String &&
         (this._listeners[room] !== void 0).should.be.ok
       );
       delete this._listeners[room];
-      this.events.emit('unlistenFrom', room);
+      this.events.emit('unlistenFrom', { room });
       return this;
     }
   }

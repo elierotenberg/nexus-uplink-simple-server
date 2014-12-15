@@ -81,7 +81,7 @@ class UplinkSimpleServer {
     return this;
   }
 
-  pull(path) {
+  pull({ path }) {
     return Promise.try(() => {
       _.dev(() => path.should.be.a.String &&
         (this._stores.match(path) !== null).should.be.ok
@@ -91,7 +91,7 @@ class UplinkSimpleServer {
     });
   }
 
-  update(path, value) {
+  update({ path, value }) {
     return Promise.try(() => {
       _.dev(() => path.should.be.a.String &&
         (value === null || _.isObject(value)).should.be.ok &&
@@ -108,7 +108,7 @@ class UplinkSimpleServer {
     });
   }
 
-  emit(room, params) {
+  emit({ room, params }) {
     return Promise.try(() => {
       _.dev(() => room.should.be.a.String &&
         (params === null || _.isObject(params)).should.be.ok &&
@@ -120,7 +120,7 @@ class UplinkSimpleServer {
     });
   }
 
-  dispatch(action, params) {
+  dispatch({ action, params }) {
     return Promise.try(() => {
       params = params === void 0 ? {} : params;
       _.dev(() => action.should.be.a.String &&
@@ -146,7 +146,7 @@ class UplinkSimpleServer {
       if(this._stores.match(req.path) === null) {
         throw new HTTPExceptions.NotFound(req.path);
       }
-      return this.pull(req.path)
+      return this.pull({ path: req.path })
       .then((value) => {
         _.dev(() => (value === null || _.isObject(value)).should.be.ok);
         _.dev(() => console.warn('nexus-uplink-simple-server', '>>', 'GET', req.path, value));
@@ -182,7 +182,7 @@ class UplinkSimpleServer {
       if(!this.isActiveSession(req.body.params.guid)) {
         throw new HTTPExceptions.Unauthorized(`Invalid guid: ${req.body.params.guid}`);
       }
-      return this.dispatch(req.path, req.body.params)
+      return this.dispatch({ path: req.path, params: req.body.params })
       .then((result) => {
         _.dev(() => console.warn('nexus-uplink-simple-server', '>>', 'POST', req.path, req.body, result));
         res.status(200).json(result);
@@ -249,10 +249,10 @@ class UplinkSimpleServer {
         expire: () => this._handleExpire(guid),
         pause: () => this._handlePause(guid),
         resume: () => this._handleResume(guid),
-        subscribeTo: (path) => this._handleSubscribeTo(guid, path),
-        unsubscribeFrom: (path) => this._handleUnsubscribeFrom(guid, path),
-        listenTo: (room) => this._handleListenTo(guid, room),
-        unlistenFrom: (room) => this._handleUnlistenFrom(guid, room),
+        subscribeTo: ({ path }) => this._handleSubscribeTo(guid, { path }),
+        unsubscribeFrom: ({ path }) => this._handleUnsubscribeFrom(guid, { path }),
+        listenTo: ({ room }) => this._handleListenTo(guid, { room }),
+        unlistenFrom: ({ room }) => this._handleUnlistenFrom(guid, { room }),
       };
       this._sessions[guid] = { session, handlers };
       Object.keys(handlers).forEach((event) => session.events.addListener(event, handlers[event]));
@@ -286,7 +286,7 @@ class UplinkSimpleServer {
     this.events.emit('resume', guid);
   }
 
-  _handleSubscribeTo(guid, path) {
+  _handleSubscribeTo(guid, { path }) {
     _.dev(() => guid.should.be.a.String &&
       path.should.be.a.String &&
       (this._sessions[guid] !== void 0).should.be.ok
@@ -297,11 +297,11 @@ class UplinkSimpleServer {
     if(this._subscribers[path][guid] === void 0) {
       const { session } = this._sessions[guid];
       this._subscribers[path][guid] = session;
-      this.events.emit('subscribeTo', { guid, path });
+      this.events.emit('subscribeTo', [guid, { path }]);
     }
   }
 
-  _handleUnsubscribeFrom(guid, path) {
+  _handleUnsubscribeFrom(guid, { path }) {
     _.dev(() => guid.should.be.a.String &&
       path.should.be.a.String &&
       (this._sessions[guid] !== void 0).should.be.ok
@@ -309,7 +309,7 @@ class UplinkSimpleServer {
     if(this._subscribers[path] !== void 0) {
       if(this._subscribers[path][guid] !== void 0) {
         delete this._subscribers[path][guid];
-        this.events.emit('unsubscribeFrom', { guid, path });
+        this.events.emit('unsubscribeFrom', [guid, { path }]);
       }
       if(Object.keys(this._subscribers[path]).length === 0) {
         delete this._subscribers[path];
@@ -317,7 +317,7 @@ class UplinkSimpleServer {
     }
   }
 
-  _handleListenTo(guid, room) {
+  _handleListenTo(guid, { room }) {
     _.dev(() => guid.should.be.a.String &&
       room.should.be.a.String &&
       (this._sessions[guid] !== void 0).should.be.ok
@@ -328,11 +328,11 @@ class UplinkSimpleServer {
     if(this._listeners[room][guid] === void 0) {
       const { session } = this._sessions[guid];
       this._listeners[room][guid] = session;
-      this.events.emit('listenTo', { guid, room });
+      this.events.emit('listenTo', [guid, { room }]);
     }
   }
 
-  _handleUnlistenFrom(guid, room) {
+  _handleUnlistenFrom(guid, { room }) {
     _.dev(() => guid.should.be.a.String &&
       room.should.be.a.String &&
       (this._sessions[guid] !== void 0).should.be.ok
@@ -340,7 +340,7 @@ class UplinkSimpleServer {
     if(this._listeners[room] !== void 0) {
       if(this._listeners[room][guid] !== void 0) {
         delete this._listeners[room][guid];
-        this.events.emit('unlistenFrom', { guid, room });
+        this.events.emit('unlistenFrom', [guid, { room }]);
       }
       if(Object.keys(this._listeners[room]).length === 0) {
         delete this._listeners[room];

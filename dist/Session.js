@@ -181,7 +181,8 @@ require("6to5/polyfill");var Promise = (global || window).Promise = require("lod
       this.events.emit("expire");
     };
 
-    Session.prototype._subscribeTo = function (path) {
+    Session.prototype._subscribeTo = function (_ref5) {
+      var path = _ref5.path;
       _.dev(function () {
         return path.should.be.a.String;
       });
@@ -189,21 +190,23 @@ require("6to5/polyfill");var Promise = (global || window).Promise = require("lod
         return this;
       }
       this._subscriptions[path] = true;
-      this.events.emit("subscribeTo", path);
+      this.events.emit("subscribeTo", { path: path });
       return this;
     };
 
-    Session.prototype._unsubscribeFrom = function (path) {
+    Session.prototype._unsubscribeFrom = function (_ref6) {
       var _this8 = this;
+      var path = _ref6.path;
       _.dev(function () {
         return path.should.be.a.String && (_this8._subscriptions[path] !== void 0).should.be.ok;
       });
       delete this._subscriptions[path];
-      this.events.emit("unsubscribeFrom", path);
+      this.events.emit("unsubscribeFrom", { path: path });
       return this;
     };
 
-    Session.prototype._listenTo = function (room) {
+    Session.prototype._listenTo = function (_ref7) {
+      var room = _ref7.room;
       _.dev(function () {
         return room.should.be.a.String;
       });
@@ -211,17 +214,18 @@ require("6to5/polyfill");var Promise = (global || window).Promise = require("lod
         return this;
       }
       this._listeners[room] = true;
-      this.events.emit("listenTo", room);
+      this.events.emit("listenTo", { room: room });
       return this;
     };
 
-    Session.prototype._unlistenFrom = function (room) {
+    Session.prototype._unlistenFrom = function (_ref8) {
       var _this9 = this;
+      var room = _ref8.room;
       _.dev(function () {
         return room.should.be.a.String && (_this9._listeners[room] !== void 0).should.be.ok;
       });
       delete this._listeners[room];
-      this.events.emit("unlistenFrom", room);
+      this.events.emit("unlistenFrom", { room: room });
       return this;
     };
 

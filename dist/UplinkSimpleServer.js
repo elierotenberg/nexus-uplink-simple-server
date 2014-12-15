@@ -96,8 +96,9 @@ var UplinkSimpleServer = (function () {
     })();
   };
 
-  UplinkSimpleServer.prototype.pull = function (path) {
+  UplinkSimpleServer.prototype.pull = function (_ref2) {
     var _this2 = this;
+    var path = _ref2.path;
     return Promise["try"](function () {
       _.dev(function () {
         return path.should.be.a.String && (_this2._stores.match(path) !== null).should.be.ok;
@@ -107,8 +108,10 @@ var UplinkSimpleServer = (function () {
     });
   };
 
-  UplinkSimpleServer.prototype.update = function (path, value) {
+  UplinkSimpleServer.prototype.update = function (_ref3) {
     var _this3 = this;
+    var path = _ref3.path;
+    var value = _ref3.value;
     return Promise["try"](function () {
       _.dev(function () {
         return path.should.be.a.String && (value === null || _.isObject(value)).should.be.ok && (_this3._stores.match(path) !== null).should.be.ok;
@@ -116,11 +119,11 @@ var UplinkSimpleServer = (function () {
       var previousValue = _this3._storesCache[path];
       _this3._storesCache[path] = value;
       if (_this3._subscribers[path] !== void 0) {
-        var _ref2 = (previousValue !== void 0 && previousValue !== null && value !== null) ? [_.hash(previousValue), _.diff(previousValue, value)] : [null, {}];
-        var _ref3 = _toArray(_ref2);
+        var _ref4 = (previousValue !== void 0 && previousValue !== null && value !== null) ? [_.hash(previousValue), _.diff(previousValue, value)] : [null, {}];
+        var _ref5 = _toArray(_ref4);
 
-        var hash = _ref3[0];
-        var diff = _ref3[1];
+        var hash = _ref5[0];
+        var diff = _ref5[1];
         return Promise.map(Object.keys(_this3._subscribers[path]), function (k) {
           return _this3._subscribers[path][k].update({ path: path, diff: diff, hash: hash });
         });
@@ -128,8 +131,10 @@ var UplinkSimpleServer = (function () {
     });
   };
 
-  UplinkSimpleServer.prototype.emit = function (room, params) {
+  UplinkSimpleServer.prototype.emit = function (_ref6) {
     var _this4 = this;
+    var room = _ref6.room;
+    var params = _ref6.params;
     return Promise["try"](function () {
       _.dev(function () {
         return room.should.be.a.String && (params === null || _.isObject(params)).should.be.ok && (_this4._rooms.match(room) !== null).should.be.ok;
@@ -142,8 +147,10 @@ var UplinkSimpleServer = (function () {
     });
   };
 
-  UplinkSimpleServer.prototype.dispatch = function (action, params) {
+  UplinkSimpleServer.prototype.dispatch = function (_ref7) {
     var _this5 = this;
+    var action = _ref7.action;
+    var params = _ref7.params;
     return Promise["try"](function () {
       params = params === void 0 ? {} : params;
       _.dev(function () {
@@ -172,7 +179,7 @@ var UplinkSimpleServer = (function () {
       if (_this7._stores.match(req.path) === null) {
         throw new HTTPExceptions.NotFound(req.path);
       }
-      return _this7.pull(req.path).then(function (value) {
+      return _this7.pull({ path: req.path }).then(function (value) {
         _.dev(function () {
           return (value === null || _.isObject(value)).should.be.ok;
         });
@@ -217,7 +224,7 @@ var UplinkSimpleServer = (function () {
       if (!_this8.isActiveSession(req.body.params.guid)) {
         throw new HTTPExceptions.Unauthorized("Invalid guid: " + req.body.params.guid);
       }
-      return _this8.dispatch(req.path, req.body.params).then(function (result) {
+      return _this8.dispatch({ path: req.path, params: req.body.params }).then(function (result) {
         _.dev(function () {
           return console.warn("nexus-uplink-simple-server", ">>", "POST", req.path, req.body, result);
         });
@@ -267,8 +274,8 @@ var UplinkSimpleServer = (function () {
       close: function () {
         return _this10._handleDisconnection(socket.id);
       },
-      handshake: function (_ref4) {
-        var guid = _ref4.guid;
+      handshake: function (_ref8) {
+        var guid = _ref8.guid;
         return _this10._handleHandshake(socket.id, { guid: guid });
       } };
     Object.keys(handlers).forEach(function (event) {
@@ -294,9 +301,9 @@ var UplinkSimpleServer = (function () {
     delete this._connections[socketId];
   };
 
-  UplinkSimpleServer.prototype._handleHandshake = function (socketId, _ref5) {
+  UplinkSimpleServer.prototype._handleHandshake = function (socketId, _ref9) {
     var _this12 = this;
-    var guid = _ref5.guid;
+    var guid = _ref9.guid;
     _.dev(function () {
       return socketId.should.be.a.String && guid.should.be.a.String && (_this12._connections[socketId] !== void 0).should.be.ok;
     });
@@ -314,17 +321,21 @@ var UplinkSimpleServer = (function () {
           resume: function () {
             return _this12._handleResume(guid);
           },
-          subscribeTo: function (path) {
-            return _this12._handleSubscribeTo(guid, path);
+          subscribeTo: function (_ref10) {
+            var path = _ref10.path;
+            return _this12._handleSubscribeTo(guid, { path: path });
           },
-          unsubscribeFrom: function (path) {
-            return _this12._handleUnsubscribeFrom(guid, path);
+          unsubscribeFrom: function (_ref11) {
+            var path = _ref11.path;
+            return _this12._handleUnsubscribeFrom(guid, { path: path });
           },
-          listenTo: function (room) {
-            return _this12._handleListenTo(guid, room);
+          listenTo: function (_ref12) {
+            var room = _ref12.room;
+            return _this12._handleListenTo(guid, { room: room });
           },
-          unlistenFrom: function (room) {
-            return _this12._handleUnlistenFrom(guid, room);
+          unlistenFrom: function (_ref13) {
+            var room = _ref13.room;
+            return _this12._handleUnlistenFrom(guid, { room: room });
           } };
         _this12._sessions[guid] = { session: session, handlers: handlers };
         Object.keys(handlers).forEach(function (event) {
@@ -367,8 +378,9 @@ var UplinkSimpleServer = (function () {
     this.events.emit("resume", guid);
   };
 
-  UplinkSimpleServer.prototype._handleSubscribeTo = function (guid, path) {
+  UplinkSimpleServer.prototype._handleSubscribeTo = function (guid, _ref14) {
     var _this16 = this;
+    var path = _ref14.path;
     _.dev(function () {
       return guid.should.be.a.String && path.should.be.a.String && (_this16._sessions[guid] !== void 0).should.be.ok;
     });
@@ -378,19 +390,20 @@ var UplinkSimpleServer = (function () {
     if (this._subscribers[path][guid] === void 0) {
       var session = this._sessions[guid].session;
       this._subscribers[path][guid] = session;
-      this.events.emit("subscribeTo", { guid: guid, path: path });
+      this.events.emit("subscribeTo", [guid, { path: path }]);
     }
   };
 
-  UplinkSimpleServer.prototype._handleUnsubscribeFrom = function (guid, path) {
+  UplinkSimpleServer.prototype._handleUnsubscribeFrom = function (guid, _ref15) {
     var _this17 = this;
+    var path = _ref15.path;
     _.dev(function () {
       return guid.should.be.a.String && path.should.be.a.String && (_this17._sessions[guid] !== void 0).should.be.ok;
     });
     if (this._subscribers[path] !== void 0) {
       if (this._subscribers[path][guid] !== void 0) {
         delete this._subscribers[path][guid];
-        this.events.emit("unsubscribeFrom", { guid: guid, path: path });
+        this.events.emit("unsubscribeFrom", [guid, { path: path }]);
       }
       if (Object.keys(this._subscribers[path]).length === 0) {
         delete this._subscribers[path];
@@ -398,8 +411,9 @@ var UplinkSimpleServer = (function () {
     }
   };
 
-  UplinkSimpleServer.prototype._handleListenTo = function (guid, room) {
+  UplinkSimpleServer.prototype._handleListenTo = function (guid, _ref16) {
     var _this18 = this;
+    var room = _ref16.room;
     _.dev(function () {
       return guid.should.be.a.String && room.should.be.a.String && (_this18._sessions[guid] !== void 0).should.be.ok;
     });
@@ -409,19 +423,20 @@ var UplinkSimpleServer = (function () {
     if (this._listeners[room][guid] === void 0) {
       var session = this._sessions[guid].session;
       this._listeners[room][guid] = session;
-      this.events.emit("listenTo", { guid: guid, room: room });
+      this.events.emit("listenTo", [guid, { room: room }]);
     }
   };
 
-  UplinkSimpleServer.prototype._handleUnlistenFrom = function (guid, room) {
+  UplinkSimpleServer.prototype._handleUnlistenFrom = function (guid, _ref17) {
     var _this19 = this;
+    var room = _ref17.room;
     _.dev(function () {
       return guid.should.be.a.String && room.should.be.a.String && (_this19._sessions[guid] !== void 0).should.be.ok;
     });
     if (this._listeners[room] !== void 0) {
       if (this._listeners[room][guid] !== void 0) {
         delete this._listeners[room][guid];
-        this.events.emit("unlistenFrom", { guid: guid, room: room });
+        this.events.emit("unlistenFrom", [guid, { room: room }]);
       }
       if (Object.keys(this._listeners[room]).length === 0) {
         delete this._listeners[room];
