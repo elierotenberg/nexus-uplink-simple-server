@@ -33,9 +33,9 @@ module.exports = function({ Connection }) {
       }
       Object.keys(this._connections).forEach((id) => this.detachConnection(this._connections[id]));
       this._connections = null;
-      Object.keys(this._subscriptions).forEach(this._unsubscribeFrom);
+      Object.keys(this._subscriptions).forEach((path) => this._unsubscribeFrom({ path }));
       this._subscriptions = null;
-      Object.keys(this._listeners).forEach(this._unlistenFrom);
+      Object.keys(this._listeners).forEach((room) => this._unlistenFrom({ room }));
       this._listeners = null;
       this.events.emit('destroy');
       this.events.removeAllListeners();

@@ -53,9 +53,13 @@ require("6to5/polyfill");var Promise = (global || window).Promise = require("lod
         return _this2.detachConnection(_this2._connections[id]);
       });
       this._connections = null;
-      Object.keys(this._subscriptions).forEach(this._unsubscribeFrom);
+      Object.keys(this._subscriptions).forEach(function (path) {
+        return _this2._unsubscribeFrom({ path: path });
+      });
       this._subscriptions = null;
-      Object.keys(this._listeners).forEach(this._unlistenFrom);
+      Object.keys(this._listeners).forEach(function (room) {
+        return _this2._unlistenFrom({ room: room });
+      });
       this._listeners = null;
       this.events.emit("destroy");
       this.events.removeAllListeners();
