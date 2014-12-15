@@ -1,14 +1,15 @@
 const _ = require('lodash-next');
 const bodyParser = require('body-parser');
 const ConstantRouter = require('nexus-router').ConstantRouter;
-const HTTPExceptions = require('http-exceptions');
-const http = require('http');
 const EngineIO = require('engine.io');
+const EventEmitter = require('events').EventEmitter;
+const http = require('http');
+const HTTPExceptions = require('http-exceptions');
+
 const instanceOfEngineIOSocket = require('./instanceOfEngineIOSocket');
 const JSONCache = require('./JSONCache');
-const EventEmitter = require('events').EventEmitter;
-
-let Connection, Session;
+const Connection = require('./Connection');
+const Session = require('./Session')({ Connection });
 
 const DEFAULT_JSON_CACHE_MAX_SIZE = 10000;
 const DEFAULT_HANDSHAKE_TIMEOUT = 5000;
@@ -30,7 +31,7 @@ class UplinkSimpleServer {
   // string patterns. Each is an array that will be passed
   // to the Router constructor.
   constructor({ pid, stores, rooms, actions, app, jsonCacheMaxSize, handshakeTimeout, activityTimeout }) {
-    jsonCacheMaxSize = jsonCacheMaxSize === void 0 ? DEFAULT_JSONCACHE_SIZE : jsonCacheMaxSize;
+    jsonCacheMaxSize = jsonCacheMaxSize === void 0 ? DEFAULT_JSON_CACHE_MAX_SIZE : jsonCacheMaxSize;
     handshakeTimeout = handshakeTimeout === void 0 ? DEFAULT_HANDSHAKE_TIMEOUT : handshakeTimeout;
     activityTimeout = activityTimeout === void 0 ? DEFAULT_ACTIVITY_TIMEOUT : activityTimeout;
     _.dev(() => (pid !== void 0).should.be.ok &&
@@ -48,6 +49,7 @@ class UplinkSimpleServer {
 
     _.extend(this, {
       events: new EventEmitter(),
+      actions: new EventEmitter(),
       _pid: pid,
       _stores: createConstantRouter(stores),
       _rooms: createConstantRouter(rooms),
@@ -63,18 +65,10 @@ class UplinkSimpleServer {
       _sessions: {},
       _subscribers: {},
       _listeners: {},
-      _actionHandlers: {},
     });
-
-    // Connections represent actual living socket.io connections.
-    // Session represent a remote Uplink client instance, with a unique guid.
-    // The concept of session enforces consistency between its attached socket connections,
-    // and HTTP requests.
-    // A single session can be attached to zero or more than one connection.
-    // Uplink frames are received from and sent to sessions, not connection.
-    // Each session must keep references to its attached connections and propagate
-    // relevant frames accordingly.
   }
+
+  // Public methods
 
   listen(port, fn = _.noop) {
     _.dev(() => port.should.be.a.Number);
@@ -86,6 +80,60 @@ class UplinkSimpleServer {
     this._server.listen(port, fn);
     return this;
   }
+
+  pull(path) {
+    return Promise.try(() => {
+      _.dev(() => path.should.be.a.String &&
+        (this._stores.match(path) !== null).should.be.ok
+      );
+      const value = this._storesCache[path];
+      return value === void 0 ? null : value;
+    });
+  }
+
+  update(path, value) {
+    return Promise.try(() => {
+      _.dev(() => path.should.be.a.String &&
+        (value === null || _.isObject(value)).should.be.ok &&
+        (this._stores.match(path) !== null).should.be.ok
+      );
+      const previousValue = this._storesCache[path];
+      this._storesCache[path] = value;
+      if(this._subscribers[path] !== void 0) {
+        const [hash, diff] =
+          (previousValue !== void 0 && previousValue !== null && value !== null) ?
+          [_.hash(previousValue), _.diff(previousValue, value)] : [null, {}];
+        return Promise.map(Object.keys(this._subscribers[path]), (k) => this._subscribers[path][k].update({ path, diff, hash }));
+      }
+    });
+  }
+
+  emit(room, params) {
+    return Promise.try(() => {
+      _.dev(() => room.should.be.a.String &&
+        (params === null || _.isObject(params)).should.be.ok &&
+        (this._rooms.match(room) !== null).should.be.ok
+      );
+      if(this._listeners[room] !== void 0) {
+        return Promise.map(Object.keys(this._listeners[room]), (k) => this._listeners[room][k].emit({ room, params }));
+      }
+    });
+  }
+
+  dispatch(action, params) {
+    return Promise.try(() => {
+      params = params === void 0 ? {} : params;
+      _.dev(() => action.should.be.a.String &&
+        (params === null || _.isObject(params)).should.be.ok &&
+        (this._actions.match(action) !== null).should.be.ok
+      );
+      const handlers = this.actions.listeners(action).length;
+      this.actions.emit(action, params);
+      return { handlers };
+    });
+  }
+
+  // Private methods
 
   _bindIOHandlers() {
     this._io.attach(this.server);
@@ -134,7 +182,7 @@ class UplinkSimpleServer {
       if(!this.isActiveSession(req.body.params.guid)) {
         throw new HTTPExceptions.Unauthorized(`Invalid guid: ${req.body.params.guid}`);
       }
-      return this._dispatch(req.path, req.body.params)
+      return this.dispatch(req.path, req.body.params)
       .then((result) => {
         _.dev(() => console.warn('nexus-uplink-simple-server', '>>', 'POST', req.path, req.body, result));
         res.status(200).json(result);
@@ -273,12 +321,12 @@ class UplinkSimpleServer {
       room.should.be.a.String &&
       (this._sessions[guid] !== void 0).should.be.ok
     );
-    if(this._listeners[path] === void 0) {
-      this._listeners[path] = {};
+    if(this._listeners[room] === void 0) {
+      this._listeners[room] = {};
     }
-    if(this._listeners[path][guid] === void 0) {
+    if(this._listeners[room][guid] === void 0) {
       const { session } = this._sessions[guid];
-      this._listeners[path][guid] = session;
+      this._listeners[room][guid] = session;
       this.events.emit('listenTo', { guid, room });
     }
   }
@@ -291,7 +339,7 @@ class UplinkSimpleServer {
     if(this._listeners[room] !== void 0) {
       if(this._listeners[room][guid] !== void 0) {
         delete this._listeners[room][guid];
-        this.events.emit('unlistenFrom', { guid, path });
+        this.events.emit('unlistenFrom', { guid, room });
       }
       if(Object.keys(this._listeners[room]).length === 0) {
         delete this._listeners[room];
@@ -303,151 +351,31 @@ class UplinkSimpleServer {
     _.dev(() => object.should.be.an.Object);
     return this._jsonCache.stringify(object);
   }
-
-  pull(path) {
-    return Promise.try(() => {
-      _.dev(() => path.should.be.a.String &&
-        (this._stores.match(path) !== null).should.be.ok
-      );
-      const value = this._storesCache[path];
-      return value === void 0 ? null : value;
-    });
-  }
-
-  update(path, value) {
-    return Promise.try(() => {
-      _.dev(() => path.should.be.a.String &&
-        (value === null || _.isObject(value)).should.be.ok &&
-        (this._stores.match(path) !== null).should.be.ok
-      );
-      const previousValue = this._storesCache[path];
-      this._storesCache[path] = value;
-      if(this._subscribers[path] !== void 0) {
-        const [hash, diff] =
-          (previousValue !== void 0 && previousValue !== null && value !== null) ?
-          [_.hash(previousValue), _.diff(previousValue, value)] : [null, {}];
-        return Promise.map(Object.keys(this._subscribers[path]), (k) => this._subscribers[path][k].update({ path, diff, hash }));
-      }
-    });
-  }
-
-  emit(room, params) {
-    return Promise.try(() => {
-      _.dev(() => room.should.be.a.String &&
-        (params === null || _.isObject(params)).should.be.ok &&
-        (this._rooms.match(room) !== null).should.be.ok
-      );
-      if(this._listeners[room] !== void 0) {
-        return Promise.map(Object.keys(this._listeners[room]), (k) => this._listeners[room][k].emit({ room, params }));
-      }
-    });
-  }
-
-  addActionHandler(action, handler) {
-    _.dev(() => action.should.be.a.String &&
-      handler.should.be.a.Function &&
-      (this.actions.match(action) !== null).should.be.ok
-    );
-    let createdAction = false;
-    if(!this.actions[action]) {
-      this.actions[action] = [];
-      createdAction = true;
-    }
-    this.actions[action].push(handler);
-    return { createdAction };
-  }
-
-  removeActionHandler(action, handler) {
-    _.dev(() => action.should.be.a.String &&
-      handler.should.be.a.Function &&
-      this.actions[action].should.be.an.Array &&
-      _.contains(this.actions[action], handler).should.be.ok
-    );
-    // Loop through the list of handlers here;
-    // We don't expect to have _that_ much different handlers
-    // for a given action, so performance implications
-    // should be completely negligible.
-    this.actions[action] = _.without(this.actions[action], handler);
-    let deletedAction = false;
-    if(this.actions[action].length === 0) {
-      delete this.actions[action];
-      deletedAction = true;
-    }
-    return { deletedAction };
-  }
-
-  *dispatch(action, params = {}) { // jshint ignore:line
-    _.dev(() => action.should.be.a.String &&
-      params.should.be.an.Object &&
-      params.guid.should.be.a.String &&
-      (this.actions[action].match(action) !== null).should.be.ok
-    );
-    // Run all handlers concurrently and return the list of the results
-    // (empty list if no handlers).
-    // If an action handler throws, then dispatch will throw, but the others handlers
-    // can still succeed.
-    return yield (this.actionHandlers[action] ? this.actionHandlers[action] : []) // jshint ignore:line
-    .map((handler) => handler.call(null, params));
-  }
-
-  hasSession(guid) {
-    return !!this.sessions[guid];
-  }
-
-  getSession(guid) {
-    _.dev(() => guid.should.be.a.String);
-    if(!this.sessions[guid]) {
-      this.sessions[guid] = this.sessionCreated(new Session({ guid, uplink: this, timeout: this.timeout })).cancellable();
-    }
-    return this.sessions[guid];
-  }
-
-  deleteSession(session) {
-    _.dev(() => session.should.be.an.instanceOf(Session) &&
-      (this.sessions[session.guid] !== void 0).should.be.ok
-    );
-    this.sessions[session.guid].cancel(new Error('Session deleted.'));
-    delete this.sessions[session.guid];
-    session.destroy();
-    return this.sessionDeleted(session);
-  }
-
-  // No-op placeholder, to be overridden by subclasses to initialize
-  // session-related resources.
-  // Implementation should return a Promise for the created session.
-  sessionCreated(session) {
-    return Promise.resolve(session);
-  }
-
-  // No-op placeholder, to be overridden by subclasses to clean-up
-  // session-related resources.
-  // Implementation should return a Promise for the deleted session.
-  sessionDeleted(session) {
-    return Promise.resolve(session);
-  }
 }
 
 _.extend(UplinkSimpleServer.prototype, {
+  _pid: null,
+
   events: null,
-  stores: null,
-  rooms: null,
   actions: null,
-  app: null,
-  timeout: null,
-  server: null,
 
-  jsonCache: null,
-  _data: null,
+  _stores: null,
+  _rooms: null,
+  _actions: null,
+  _storesCache: null,
+  _jsonCache: null,
+  _handshakeTimeout: null,
+  _activityTimeout: null,
 
-  connections: null,
-  sessions: null,
+  _app: null,
+  _server: null,
+  _io: null,
 
-  subscribers: null,
-  listeners: null,
-  actionHandlers: null,
+  _connections: null,
+  _sessions: null,
+  _subscribers: null,
+  _listeners: null,
 });
 
-Connection = require('./Connection')({ UplinkSimpleServer });
-Session = require('./Session')({ Connection, UplinkSimpleServer });
 
 module.exports = UplinkSimpleServer;

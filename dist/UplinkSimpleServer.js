@@ -1,18 +1,33 @@
 "use strict";
 
+var _toArray = function (arr) {
+  return Array.isArray(arr) ? arr : Array.from(arr);
+};
+
 require("6to5/polyfill");var Promise = (global || window).Promise = require("lodash-next").Promise;var __DEV__ = (process.env.NODE_ENV !== "production");var __PROD__ = !__DEV__;var __BROWSER__ = (typeof window === "object");var __NODE__ = !__BROWSER__;var _ = require("lodash-next");
 var bodyParser = require("body-parser");
 var ConstantRouter = require("nexus-router").ConstantRouter;
-var HTTPExceptions = require("http-exceptions");
-var http = require("http");
 var EngineIO = require("engine.io");
+var EventEmitter = require("events").EventEmitter;
+var http = require("http");
+var HTTPExceptions = require("http-exceptions");
+
 var instanceOfEngineIOSocket = require("./instanceOfEngineIOSocket");
 var JSONCache = require("./JSONCache");
+var Connection = require("./Connection");
+var Session = require("./Session")({ Connection: Connection });
 
-var Connection, Session;
+var DEFAULT_JSON_CACHE_MAX_SIZE = 10000;
+var DEFAULT_HANDSHAKE_TIMEOUT = 5000;
+var DEFAULT_ACTIVITY_TIMEOUT = 10000;
 
-var DEFAULT_EXPIRE_TIMEOUT = 10000;
-var DEFAULT_JSONCACHE_SIZE = 10000;
+// Here we use ConstantRouter instances; we only need
+// to know if a given string match a registered pattern.
+function createConstantRouter(t) {
+  return new ConstantRouter(_.object(t.map(function (v) {
+    return [v, v];
+  })));
+}
 
 // Most public methods expose an async API
 // to enforce consistence with async data backends,
@@ -30,55 +45,38 @@ var UplinkSimpleServer = (function () {
     var rooms = _ref.rooms;
     var actions = _ref.actions;
     var app = _ref.app;
-    var timeout = _ref.timeout;
-    var jsonCache = _ref.jsonCache;
-    timeout = timeout || DEFAULT_EXPIRE_TIMEOUT;
-    jsonCache = jsonCache || {};
+    var jsonCacheMaxSize = _ref.jsonCacheMaxSize;
+    var handshakeTimeout = _ref.handshakeTimeout;
+    var activityTimeout = _ref.activityTimeout;
+    jsonCacheMaxSize = jsonCacheMaxSize === void 0 ? DEFAULT_JSON_CACHE_MAX_SIZE : jsonCacheMaxSize;
+    handshakeTimeout = handshakeTimeout === void 0 ? DEFAULT_HANDSHAKE_TIMEOUT : handshakeTimeout;
+    activityTimeout = activityTimeout === void 0 ? DEFAULT_ACTIVITY_TIMEOUT : activityTimeout;
     _.dev(function () {
-      return (pid !== undefined).should.be.ok && stores.should.be.an.Array && rooms.should.be.an.Array && actions.should.be.an.Array &&
+      return (pid !== void 0).should.be.ok && stores.should.be.an.Array && rooms.should.be.an.Array && actions.should.be.an.Array &&
       // Ducktype-check for an express-like app
-      app.get.should.be.a.Function && app.post.should.be.a.Function && timeout.should.be.a.Number.and.not.be.below(0) && jsonCache.should.be.an.Object;
+      app.get.should.be.a.Function && app.post.should.be.a.Function &&
+      // Other typechecks
+      jsonCacheMaxSize.should.be.a.Number.and.not.be.below(0) && handshakeTimeout.should.be.a.Number.and.not.be.below(0) && activityTimeout.should.be.a.Number.and.not.be.below(0);
     });
-    jsonCache.maxSize = jsonCache.maxSize || DEFAULT_JSONCACHE_SIZE;
-    _.dev(function () {
-      return jsonCache.maxSize.should.be.a.Number.not.below(0);
-    });
-    this.pid = pid;
-    // Here we use ConstantRouter instances; we only need
-    // to know if a given string match a registered pattern.
-    var createConstantRouter = function (t) {
-      return new ConstantRouter(_.object(t.map(function (v) {
-        return [v, v];
-      })));
-    };
-    this.stores = createConstantRouter(stores);
-    this.rooms = createConstantRouter(rooms);
-    this.actions = createConstantRouter(actions);
-    this.app = app;
-    this.timeout = timeout;
-    this.server = http.Server(app);
-    this.io = EngineIO.Server();
 
-    // JSON Encoding cache
-    this.jsonCache = new JSONCache(jsonCache);
-
-    // Store data cache
-    this._data = {};
-
-    // Connections represent actual living socket.io connections.
-    // Session represent a remote Uplink client instance, with a unique guid.
-    // The concept of session enforces consistency between its attached socket connections,
-    // and HTTP requests.
-    // A single session can be attached to zero or more than one connection.
-    // Uplink frames are received from and sent to sessions, not connection.
-    // Each session must keep references to its attached connections and propagate
-    // relevant frames accordingly.
-    this.connections = {};
-    this.sessions = {};
-
-    this.subscribers = {};
-    this.listeners = {};
-    this.actionHandlers = {};
+    _.extend(this, {
+      events: new EventEmitter(),
+      actions: new EventEmitter(),
+      _pid: pid,
+      _stores: createConstantRouter(stores),
+      _rooms: createConstantRouter(rooms),
+      _actions: createConstantRouter(actions),
+      _storesCache: {},
+      _jsonCache: new JSONCache({ maxSize: jsonCacheMaxSize }),
+      _handshakeTimeout: handshakeTimeout,
+      _activityTimeout: activityTimeout,
+      _app: app,
+      _server: http.Server(app),
+      _io: EngineIO.Server(),
+      _connections: {},
+      _sessions: {},
+      _subscribers: {},
+      _listeners: {} });
   };
 
   UplinkSimpleServer.prototype.listen = function (port, fn) {
@@ -89,395 +87,379 @@ var UplinkSimpleServer = (function () {
         return port.should.be.a.Number;
       });
 
-      _this.bindIOHandlers();
-      _this.bindHTTPHandlers();
+      _this._bindIOHandlers();
+      _this._bindHTTPHandlers();
 
       // Attach the EngineIO handlers first
-      _this.server.listen(port, fn);
+      _this._server.listen(port, fn);
       return _this;
     })();
   };
 
-  UplinkSimpleServer.prototype.bindIOHandlers = function () {
+  UplinkSimpleServer.prototype._bindIOHandlers = function () {
     var _this2 = this;
-    this.io.attach(this.server);
-    this.io.on("connection", function (socket) {
-      return _this2.handleConnection(socket);
+    this._io.attach(this.server);
+    this._io.on("connection", function (socket) {
+      return _this2._handleConnection(socket);
     });
   };
 
-  UplinkSimpleServer.prototype.bindHTTPHandlers = function () {
+  UplinkSimpleServer.prototype._handleGET = function (req, res) {
     var _this3 = this;
-    // Fetch from store
-    this.app.get("*",
-    // Check that this store path is whitelisted
-    function (req, res, next) {
-      return _this3.stores.match(req.path) === null ? HTTPExceptions.forward(res, new HTTPExceptions.NotFound(req.path)) : next();
-    }, function (req, res) {
-      return _this3.pull(req.path).then(function (value) {
+    Promise["try"](function () {
+      _.dev(function () {
+        return console.warn("nexus-uplink-simple-server", "<<", "GET", req.path);
+      });
+      if (_this3._stores.match(req.path) === null) {
+        throw new HTTPExceptions.NotFound(req.path);
+      }
+      return _this3._pull(req.path).then(function (value) {
         _.dev(function () {
           return (value === null || _.isObject(value)).should.be.ok;
         });
         _.dev(function () {
-          return console.warn("GET " + req.path, value);
+          return console.warn("nexus-uplink-simple-server", ">>", "GET", req.path, value);
         });
         res.status(200).type("application/json").send(value);
-      })["catch"](function (e) {
-        _.dev(function () {
-          return console.warn("GET " + req.path, e, e.stack);
-        });
-        if (e instanceof HTTPExceptions.HTTPError) {
-          HTTPExceptions.forward(res, e);
-        } else {
-          (function () {
-            var json = { err: e.toString() };
-            _.dev(function () {
-              return json.stack = e.stack;
-            });
-            res.status(500).json(json);
-          })();
-        }
       });
-    });
-
-    // Dispatch action
-    this.app.post("*",
-    // Parse body as JSON
-    bodyParser.json(),
-    // Check that this action path is whitelisted
-    function (req, res, next) {
-      return _this3.actions.match(req.path) === null ? HTTPExceptions.forward(res, new HTTPExceptions.NotFound(req.path)) : next();
-    },
-    // params should be present
-    function (req, res, next) {
-      return !_.isObject(req.body.params) ? HTTPExceptions.forward(res, new HTTPExceptions.BadRequest("Missing required field: 'param'")) : next();
-    },
-    // Check for a valid, active session guid in params
-    function (req, res, next) {
-      return !req.body.params.guid ? HTTPExceptions.forward(res, new HTTPExceptions.Unauthorized("Missing required field: 'params'.'guid'")) : next();
-    }, function (req, res, next) {
-      return !_this3.isActiveSession(req.body.params.guid) ? HTTPExceptions.forward(res, HTTPExceptions.Unauthorized("Invalid 'guid'.")) : next();
-    }, function (req, res) {
-      return _this3.dispatch(req.path, req.body.params).then(function (result) {
-        _.dev(function () {
-          return console.warn("POST " + req.path, req.body, result);
-        });
-        res.status(200).json(result);
-      })["catch"](function (e) {
-        _.dev(function () {
-          return console.warn("POST " + req.path, req.body, e);
-        });
-        if (e instanceof HTTPExceptions.HTTPError) {
-          HTTPExceptions.forward(res, e);
-        } else {
-          res.status(500).json({ err: e.toString() });
-        }
+    })["catch"](function (err) {
+      _.dev(function () {
+        return console.warn("nexus-uplink-simple-server", ">>", "GET", req.path, err);
       });
+      if (err instanceof HTTPExceptions.HTTPError) {
+        return HTTPExceptions.forward(res, err);
+      }
+      var json = { err: err.toString() };
+      _.dev(function () {
+        return json.stack = err.stack;
+      });
+      res.status(500).json(json);
     });
   };
 
-  UplinkSimpleServer.prototype.handleConnection = function (socket) {
+  UplinkSimpleServer.prototype._handlePOST = function (req, res) {
     var _this4 = this;
+    Promise["try"](function () {
+      _.dev(function () {
+        return console.warn("nexus-uplink-simple-server", "<<", "POST", req.path, req.body);
+      });
+      if (_this4._actions.match(req.path) === null) {
+        throw new HTTPExceptions.NotFound(req.path);
+      }
+      if (req.body.params === void 0) {
+        throw new HTTPExceptions.BadRequest("Missing required field: 'params'.");
+      }
+      if (!_.isObject(req.body.params)) {
+        throw new HTTPExceptions.BadRequest("Field 'params' should be an Object.");
+      }
+      if (req.body.params.guid === void 0) {
+        throw new HTTPExceptions.BadRequest("Missing required field: 'params'.'guid'.");
+      }
+      if (!_this4.isActiveSession(req.body.params.guid)) {
+        throw new HTTPExceptions.Unauthorized("Invalid guid: " + req.body.params.guid);
+      }
+      return _this4.dispatch(req.path, req.body.params).then(function (result) {
+        _.dev(function () {
+          return console.warn("nexus-uplink-simple-server", ">>", "POST", req.path, req.body, result);
+        });
+        res.status(200).json(result);
+      });
+    })["catch"](function (err) {
+      _.dev(function () {
+        return console.warn("nexus-uplink-simple-server", ">>", "POST", req.path, req.body, err);
+      });
+      if (err instanceof HTTPExceptions.HTTPError) {
+        return HTTPExceptions.forward(res, err);
+      }
+      var json = { err: err.toString() };
+      _.dev(function () {
+        return json.stack = err.stack;
+      });
+      res.status(500).json(json);
+    });
+  };
+
+  UplinkSimpleServer.prototype._bindHTTPHandlers = function () {
+    var _this5 = this;
+    this._app.get("*", function (req, res) {
+      return _this5._handleGET(req, res);
+    });
+    this._app.post("*", bodyParser.json(), function (req, res) {
+      return _this5._handlePOST(req, res);
+    });
+  };
+
+  UplinkSimpleServer.prototype._handleConnection = function (socket) {
+    var _this6 = this;
     _.dev(function () {
       return console.warn("nexus-uplink-simple-server", "<<", "connection", socket.id);
     });
     _.dev(function () {
-      return instanceOfEngineIOSocket(socket).should.be.ok && (_this4.connections[socket.id] === void 0).should.be.ok;
+      return instanceOfEngineIOSocket(socket).should.be.ok && (_this6._connections[socket.id] === void 0).should.be.ok;
     });
-    this.connections[socket.id] = new Connection({ socket: socket, uplink: this });
-    socket.on("close", function (reason, desc) {
-      return _this4.handleDisconnection(socket, reason, desc);
+    var connection = new Connection({
+      socket: socket,
+      stringify: function (obj) {
+        return _this6._stringify(obj);
+      },
+      handshakeTimeout: this._handshakeTimeout });
+    var handlers = {
+      close: function () {
+        return _this6._handleDisconnection(socket.id);
+      },
+      handshake: function (_ref2) {
+        var guid = _ref2.guid;
+        return _this6._handleHandshake(socket.id, { guid: guid });
+      } };
+    Object.keys(handlers).forEach(function (event) {
+      return connection.events.addListener(event, handlers[event]);
     });
+    this._connections[socket.id] = { connection: connection, handlers: handlers };
   };
 
-  UplinkSimpleServer.prototype.handleDisconnection = function (socket, reason, desc) {
-    var _this5 = this;
+  UplinkSimpleServer.prototype._handleDisconnection = function (socketId) {
+    var _this7 = this;
     _.dev(function () {
-      return console.warn("nexus-uplink-simple-server", "<<", "disconnection", socket.id, { reason: reason, desc: desc });
+      return socketId.should.be.a.String && (_this7._connections[socketId] !== void 0).should.be.ok && _this7._connections[socketId].connection.id.should.be.exactly(socketId);
     });
-    _.dev(function () {
-      return instanceOfEngineIOSocket(socket).should.be.ok && (_this5.connections[socket.id] !== void 0).should.be.ok && (_this5.connections[socket.id].socket !== void 0).should.be.ok && _this5.connections[socket.id].socket.should.be.exactly(socket);
+    var connection = this._connections[socketId].connection;
+    var handlers = this._connections[socketId].handlers;
+    if (connection.isConnected) {
+      this._sessions[connection.guid].session.detachConnection(connection);
+    }
+    connection.destroy();
+    Object.keys(handlers).forEach(function (event) {
+      return connection.events.removeListener(event, handlers[event]);
     });
-    this.connections[socket.id].destroy();
-    delete this.connections[socket.id];
+    delete this._connections[socketId];
   };
 
-  UplinkSimpleServer.prototype.stringify = function (object) {
+  UplinkSimpleServer.prototype._handleHandshake = function (socketId, _ref3) {
+    var _this8 = this;
+    var guid = _ref3.guid;
+    _.dev(function () {
+      return socketId.should.be.a.String && guid.should.be.a.String && (_this8._connections[socketId] !== void 0).should.be.ok;
+    });
+    var connection = this._connections[socketId].connection;
+    if (this._sessions[guid] === void 0) {
+      (function () {
+        var session = new Session({ guid: guid, activityTimeout: _this8._activityTimeout });
+        var handlers = {
+          expire: function () {
+            return _this8._handleExpire(guid);
+          },
+          pause: function () {
+            return _this8._handlePause(guid);
+          },
+          resume: function () {
+            return _this8._handleResume(guid);
+          },
+          subscribeTo: function (path) {
+            return _this8._handleSubscribeTo(guid, path);
+          },
+          unsubscribeFrom: function (path) {
+            return _this8._handleUnsubscribeFrom(guid, path);
+          },
+          listenTo: function (room) {
+            return _this8._handleListenTo(guid, room);
+          },
+          unlistenFrom: function (room) {
+            return _this8._handleUnlistenFrom(guid, room);
+          } };
+        _this8._sessions[guid] = { session: session, handlers: handlers };
+        Object.keys(handlers).forEach(function (event) {
+          return session.events.addListener(event, handlers[event]);
+        });
+        _this8.events.emit("create", { guid: guid });
+      })();
+    }
+    this._sessions[guid].session.attachConnection(connection);
+  };
+
+  UplinkSimpleServer.prototype._handleExpire = function (guid) {
+    var _this9 = this;
+    _.dev(function () {
+      return guid.should.be.a.String && (_this9._sessions[guid] !== void 0).should.be.ok;
+    });
+    var session = this._sessions[guid].session;
+    var handlers = this._sessions[guid].handlers;
+    session.destroy();
+    Object.keys(handlers).forEach(function (event) {
+      return session.events.removeListener(event, handlers[event]);
+    });
+    delete this._sessions[guid];
+    this.events.emit("delete", { guid: guid });
+  };
+
+  UplinkSimpleServer.prototype._handlePause = function (guid) {
+    var _this10 = this;
+    _.dev(function () {
+      return guid.should.be.a.String && (_this10._sessions[guid] !== void 0).should.be.ok;
+    });
+    this.events.emit("pause", guid);
+  };
+
+  UplinkSimpleServer.prototype._handleResume = function (guid) {
+    var _this11 = this;
+    _.dev(function () {
+      return guid.should.be.a.String && (_this11._sessions[guid] !== void 0).should.be.ok;
+    });
+    this.events.emit("resume", guid);
+  };
+
+  UplinkSimpleServer.prototype._handleSubscribeTo = function (guid, path) {
+    var _this12 = this;
+    _.dev(function () {
+      return guid.should.be.a.String && path.should.be.a.String && (_this12._sessions[guid] !== void 0).should.be.ok;
+    });
+    if (this._subscribers[path] === void 0) {
+      this._subscribers[path] = {};
+    }
+    if (this._subscribers[path][guid] === void 0) {
+      var session = this._sessions[guid].session;
+      this._subscribers[path][guid] = session;
+      this.events.emit("subscribeTo", { guid: guid, path: path });
+    }
+  };
+
+  UplinkSimpleServer.prototype._handleUnsubscribeFrom = function (guid, path) {
+    var _this13 = this;
+    _.dev(function () {
+      return guid.should.be.a.String && path.should.be.a.String && (_this13._sessions[guid] !== void 0).should.be.ok;
+    });
+    if (this._subscribers[path] !== void 0) {
+      if (this._subscribers[path][guid] !== void 0) {
+        delete this._subscribers[path][guid];
+        this.events.emit("unsubscribeFrom", { guid: guid, path: path });
+      }
+      if (Object.keys(this._subscribers[path]).length === 0) {
+        delete this._subscribers[path];
+      }
+    }
+  };
+
+  UplinkSimpleServer.prototype._handleListenTo = function (guid, room) {
+    var _this14 = this;
+    _.dev(function () {
+      return guid.should.be.a.String && room.should.be.a.String && (_this14._sessions[guid] !== void 0).should.be.ok;
+    });
+    if (this._listeners[room] === void 0) {
+      this._listeners[room] = {};
+    }
+    if (this._listeners[room][guid] === void 0) {
+      var session = this._sessions[guid].session;
+      this._listeners[room][guid] = session;
+      this.events.emit("listenTo", { guid: guid, room: room });
+    }
+  };
+
+  UplinkSimpleServer.prototype._handleUnlistenFrom = function (guid, room) {
+    var _this15 = this;
+    _.dev(function () {
+      return guid.should.be.a.String && room.should.be.a.String && (_this15._sessions[guid] !== void 0).should.be.ok;
+    });
+    if (this._listeners[room] !== void 0) {
+      if (this._listeners[room][guid] !== void 0) {
+        delete this._listeners[room][guid];
+        this.events.emit("unlistenFrom", { guid: guid, room: room });
+      }
+      if (Object.keys(this._listeners[room]).length === 0) {
+        delete this._listeners[room];
+      }
+    }
+  };
+
+  UplinkSimpleServer.prototype._stringify = function (object) {
     _.dev(function () {
       return object.should.be.an.Object;
     });
-    return this.jsonCache.stringify(object);
+    return this._jsonCache.stringify(object);
   };
 
   UplinkSimpleServer.prototype.pull = function (path) {
-    var _this6 = this;
+    var _this16 = this;
     return Promise["try"](function () {
       _.dev(function () {
-        return path.should.be.a.String && (_this6.stores.match(path) !== null).should.be.ok;
+        return path.should.be.a.String && (_this16._stores.match(path) !== null).should.be.ok;
       });
-      return _this6._data[path];
+      var value = _this16._storesCache[path];
+      return value === void 0 ? null : value;
     });
   };
 
-  UplinkSimpleServer.prototype.push = regeneratorRuntime.mark(function _callee(path, value) {
-    var _this7 = this;
-    return regeneratorRuntime.wrap(function _callee$(_context) {
-      while (true) switch (_context.prev = _context.next) {
-        case 0: _context.next = 2;
-          return _this7.update(path, value);
-        case 2: return _context.abrupt("return", _context.sent);
-        case 3:
-        case "end": return _context.stop();
-      }
-    }, _callee, this);
-  });
-  UplinkSimpleServer.prototype.update = regeneratorRuntime.mark(function _callee2(path, value) {
-    var _this8 = this;
-    var hash, diff;
-    return regeneratorRuntime.wrap(function _callee2$(_context2) {
-      while (true) switch (_context2.prev = _context2.next) {
-        case 0: // jshint ignore:line
-          _.dev(function () {
-            return path.should.be.a.String && value.should.be.an.Object && (_this8.stores.match(path) !== null).should.be.ok;
-          });
-          if (!_this8.subscribers[path]) {
-            _context2.next = 8;
-            break;
-          }
-          // Diff and hash as early as possible to avoid duplicating
-          // these lengthy calculations down the propagation tree.
-          // If no value was present before, then nullify the hash. No value has a null hash.
-          if (!_this8._data[path]) {
-            hash = null;
-          } else {
-            hash = _.hash(_this8._data[path]);
-            diff = _.diff(_this8._data[path], value);
-          }
-          _this8._data[path] = value;
-          _context2.next = 6;
-          return Object.keys(_this8.subscribers[path]) // jshint ignore:line
-          .map(function (k) {
-            return _this8.subscribers[path][k].update({ path: path, hash: hash, diff: diff });
-          });
-        case 6: _context2.next = 9;
-          break;
-        case 8:
-          _this8._data[path] = value;
-        case 9:
-        case "end": return _context2.stop();
-      }
-    }, _callee2, this);
-  });
-  UplinkSimpleServer.prototype.subscribeTo = function (path, session) {
-    var _this9 = this;
-    _.dev(function () {
-      return path.should.be.a.String && session.should.be.an.instanceOf(Session);
-    });
-    var createdPath;
-    if (this.subscribers[path]) {
-      // Fail early to avoid creating leaky entry in this.subscribers
-      _.dev(function () {
-        return (_this9.subscribers[path][session.id] === void 0).should.be.ok;
-      });
-      createdPath = false;
-    } else {
-      this.subscribers[path] = {};
-      createdPath = true;
-    }
-    this.subscribers[path][session.id] = session;
-    // Return a flag indicating whether this is the first subscription
-    // to this path; can be useful to implement subclass-specific handling
-    // (eg. subscribe to an external backend)
-    return { createdPath: createdPath };
-  };
-
-  UplinkSimpleServer.prototype.unsubscribeFrom = function (path, session) {
-    var _this10 = this;
-    _.dev(function () {
-      return path.should.be.a.String && session.should.be.an.instanceOf(Session) && (_this10.subscribers[path] !== void 0).should.be.ok && _this10.subscribers[path].should.be.an.Object && (_this10.subscribers[path][session.id] !== void 0).should.be.ok && _this10.subscribers[path][session.id].should.be.exactly(session);
-    });
-    var deletedPath = false;
-    delete this.subscribers[path][session.id];
-    if (Object.keys(this.subscribers[path]).length === 0) {
-      delete this.subscribers[path];
-      deletedPath = true;
-    }
-    // Return a flag indicating whether this was the last subscription
-    // to this path; can be useful to implement subclass-specific handling
-    // (eg. unsbuscribe from an external backend)
-    return { deletedPath: deletedPath };
-  };
-
-  UplinkSimpleServer.prototype.emit = regeneratorRuntime.mark(function _callee3(room, params) {
-    var _this11 = this;
-    return regeneratorRuntime.wrap(function _callee3$(_context3) {
-      while (true) switch (_context3.prev = _context3.next) {
-        case 0: // jshint ignore:line
-          _.dev(function () {
-            return room.should.be.a.String && params.should.be.an.Object && (_this11.rooms.match(room) !== null).should.be.ok;
-          });
-          if (!_this11.listeners[room]) {
-            _context3.next = 4;
-            break;
-          }
-          _context3.next = 4;
-          return Object.keys(_this11.listeners[room]) // jshint ignore:line
-          .map(function (k) {
-            return _this11.listeners[room][k].emit({ room: room, params: params });
-          });
-        case 4:
-        case "end": return _context3.stop();
-      }
-    }, _callee3, this);
-  });
-  UplinkSimpleServer.prototype.listenTo = function (room, session) {
-    var _this12 = this;
-    _.dev(function () {
-      return room.should.be.a.String && session.should.be.an.instanceOf(Session);
-    });
-    var createdRoom;
-    if (this.listeners[room]) {
-      // Fail early to avoid creating a leaky entry in this.listeners
-      _.dev(function () {
-        return (_this12.listeners[room][session.id] === void 0).should.be.ok;
-      });
-      createdRoom = false;
-    } else {
-      this.listeners[room] = {};
-      createdRoom = true;
-    }
-    this.listeners[room][session.id] = session;
-    // Return a flag indicating whether this is the first listener
-    // to this room; can be useful to implement subclass-specific handling
-    // (e.g. subscribe to an external backend)
-    return { createdRoom: createdRoom };
-  };
-
-  UplinkSimpleServer.prototype.unlistenTo = function (room, session) {
-    var _this13 = this;
-    _.dev(function () {
-      return room.should.be.a.String && session.should.be.an.instanceOf(Session) && (_this13.listeners[room] !== void 0).should.be.ok && _this13.listeners[room].should.be.exactly(session);
-    });
-    var deletedRoom = false;
-    delete this.listeners[room][session.id];
-    if (Object.keys(this.listeners[room]).length === 0) {
-      delete this.listeners[room];
-      deletedRoom = true;
-    }
-    // Return a flag indicating whether this was the last listener
-    // to this room; can be useful to implement subclass-specific handling
-    // (e.g. unsuscribe from an external backend)
-    return { deletedRoom: deletedRoom };
-  };
-
-  UplinkSimpleServer.prototype.addActionHandler = function (action, handler) {
-    var _this14 = this;
-    _.dev(function () {
-      return action.should.be.a.String && handler.should.be.a.Function && (_this14.actions.match(action) !== null).should.be.ok;
-    });
-    var createdAction = false;
-    if (!this.actions[action]) {
-      this.actions[action] = [];
-      createdAction = true;
-    }
-    this.actions[action].push(handler);
-    return { createdAction: createdAction };
-  };
-
-  UplinkSimpleServer.prototype.removeActionHandler = function (action, handler) {
-    var _this15 = this;
-    _.dev(function () {
-      return action.should.be.a.String && handler.should.be.a.Function && _this15.actions[action].should.be.an.Array && _.contains(_this15.actions[action], handler).should.be.ok;
-    });
-    // Loop through the list of handlers here;
-    // We don't expect to have _that_ much different handlers
-    // for a given action, so performance implications
-    // should be completely negligible.
-    this.actions[action] = _.without(this.actions[action], handler);
-    var deletedAction = false;
-    if (this.actions[action].length === 0) {
-      delete this.actions[action];
-      deletedAction = true;
-    }
-    return { deletedAction: deletedAction };
-  };
-
-  UplinkSimpleServer.prototype.dispatch = regeneratorRuntime.mark(function _callee4(action, params) {
-    var _this16 = this;
-    return regeneratorRuntime.wrap(function _callee4$(_context4) {
-      while (true) switch (_context4.prev = _context4.next) {
-        case 0:
-          if (params === undefined) params = {};
-          // jshint ignore:line
-          _.dev(function () {
-            return action.should.be.a.String && params.should.be.an.Object && params.guid.should.be.a.String && (_this16.actions[action].match(action) !== null).should.be.ok;
-          });
-          _context4.next = 4;
-          return (_this16.actionHandlers[action] ? _this16.actionHandlers[action] : []) // jshint ignore:line
-          .map(function (handler) {
-            return handler.call(null, params);
-          });
-        case 4: return _context4.abrupt("return", _context4.sent);
-        case 5:
-        case "end": return _context4.stop();
-      }
-    }, _callee4, this);
-  });
-  UplinkSimpleServer.prototype.hasSession = function (guid) {
-    return !!this.sessions[guid];
-  };
-
-  UplinkSimpleServer.prototype.getSession = function (guid) {
-    _.dev(function () {
-      return guid.should.be.a.String;
-    });
-    if (!this.sessions[guid]) {
-      this.sessions[guid] = this.sessionCreated(new Session({ guid: guid, uplink: this, timeout: this.timeout })).cancellable();
-    }
-    return this.sessions[guid];
-  };
-
-  UplinkSimpleServer.prototype.deleteSession = function (session) {
+  UplinkSimpleServer.prototype.update = function (path, value) {
     var _this17 = this;
-    _.dev(function () {
-      return session.should.be.an.instanceOf(Session) && (_this17.sessions[session.guid] !== void 0).should.be.ok;
+    return Promise["try"](function () {
+      _.dev(function () {
+        return path.should.be.a.String && (value === null || _.isObject(value)).should.be.ok && (_this17._stores.match(path) !== null).should.be.ok;
+      });
+      var previousValue = _this17._storesCache[path];
+      _this17._storesCache[path] = value;
+      if (_this17._subscribers[path] !== void 0) {
+        var _ref4 = (previousValue !== void 0 && previousValue !== null && value !== null) ? [_.hash(previousValue), _.diff(previousValue, value)] : [null, {}];
+        var _ref5 = _toArray(_ref4);
+
+        var hash = _ref5[0];
+        var diff = _ref5[1];
+        return Promise.map(Object.keys(_this17._subscribers[path]), function (k) {
+          return _this17._subscribers[path][k].update({ path: path, diff: diff, hash: hash });
+        });
+      }
     });
-    this.sessions[session.guid].cancel(new Error("Session deleted."));
-    delete this.sessions[session.guid];
-    session.destroy();
-    return this.sessionDeleted(session);
   };
 
-  UplinkSimpleServer.prototype.sessionCreated = function (session) {
-    return Promise.resolve(session);
+  UplinkSimpleServer.prototype.emit = function (room, params) {
+    var _this18 = this;
+    return Promise["try"](function () {
+      _.dev(function () {
+        return room.should.be.a.String && (params === null || _.isObject(params)).should.be.ok && (_this18._rooms.match(room) !== null).should.be.ok;
+      });
+      if (_this18._listeners[room] !== void 0) {
+        return Promise.map(Object.keys(_this18._listeners[room]), function (k) {
+          return _this18._listeners[room][k].emit({ room: room, params: params });
+        });
+      }
+    });
   };
 
-  UplinkSimpleServer.prototype.sessionDeleted = function (session) {
-    return Promise.resolve(session);
+  UplinkSimpleServer.prototype.dispatch = function (action, params) {
+    var _this19 = this;
+    return Promise["try"](function () {
+      params = params === void 0 ? {} : params;
+      _.dev(function () {
+        return action.should.be.a.String && (params === null || _.isObject(params)).should.be.ok && (_this19._actions.match(action) !== null).should.be.ok;
+      });
+      var handlers = _this19.actions.listeners(action).length;
+      _this19.actions.emit(action, params);
+      return { handlers: handlers };
+    });
   };
 
   return UplinkSimpleServer;
 })();
 
 _.extend(UplinkSimpleServer.prototype, {
-  stores: null,
-  rooms: null,
+  _pid: null,
+
+  events: null,
   actions: null,
-  app: null,
-  timeout: null,
-  server: null,
 
-  jsonCache: null,
-  _data: null,
+  _stores: null,
+  _rooms: null,
+  _actions: null,
+  _storesCache: null,
+  _jsonCache: null,
+  _handshakeTimeout: null,
+  _activityTimeout: null,
 
-  connections: null,
-  sessions: null,
+  _app: null,
+  _server: null,
+  _io: null,
 
-  subscribers: null,
-  listeners: null,
-  actionHandlers: null });
+  _connections: null,
+  _sessions: null,
+  _subscribers: null,
+  _listeners: null });
 
-Connection = require("./Connection")({ UplinkSimpleServer: UplinkSimpleServer });
-Session = require("./Session")({ Connection: Connection, UplinkSimpleServer: UplinkSimpleServer });
 
 module.exports = UplinkSimpleServer;

@@ -1,4 +1,4 @@
-module.exports = function({ Connection, UplinkSimpleServer }) {
+module.exports = function({ Connection }) {
   const _ = require('lodash-next');
   const EventEmitter = require('event').EventEmitter;
 
@@ -99,10 +99,6 @@ module.exports = function({ Connection, UplinkSimpleServer }) {
       return this;
     }
 
-    _handleExpire() {
-      this.events.emit('expire');
-    }
-
     update({ path, diff, hash }) {
       _.dev(() => path.should.be.a.String);
       if(this._subscriptions[path] !== void 0) {
@@ -119,6 +115,26 @@ module.exports = function({ Connection, UplinkSimpleServer }) {
         this.proxy('emit')({ room, params });
       }
       return this;
+    }
+
+    debug(...args) {
+      return this.proxy('debug')(...args);
+    }
+
+    log(...args) {
+      return this.proxy('log')(...args);
+    }
+
+    warn(...args) {
+      return this.proxy('warn')(...args);
+    }
+
+    err(...args) {
+      return this.proxy('err')(...args);
+    }
+
+    _handleExpire() {
+      this.events.emit('expire');
     }
 
     _subscribeTo(path) {
@@ -157,22 +173,6 @@ module.exports = function({ Connection, UplinkSimpleServer }) {
       delete this._listeners[room];
       this.events.emit('unlistenFrom', room);
       return this;
-    }
-
-    debug(...args) {
-      return this.proxy('debug')(...args);
-    }
-
-    log(...args) {
-      return this.proxy('log')(...args);
-    }
-
-    warn(...args) {
-      return this.proxy('warn')(...args);
-    }
-
-    err(...args) {
-      return this.proxy('err')(...args);
     }
   }
 

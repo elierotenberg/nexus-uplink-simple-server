@@ -12,168 +12,193 @@ var _classProps = function (child, staticProps, instanceProps) {
 
 require("6to5/polyfill");var Promise = (global || window).Promise = require("lodash-next").Promise;var __DEV__ = (process.env.NODE_ENV !== "production");var __PROD__ = !__DEV__;var __BROWSER__ = (typeof window === "object");var __NODE__ = !__BROWSER__;module.exports = function (_ref) {
   var Connection = _ref.Connection;
-  var UplinkSimpleServer = _ref.UplinkSimpleServer;
   var _ = require("lodash-next");
+  var EventEmitter = require("event").EventEmitter;
+
+  var DEFAULT_ACTIVITY_TIMEOUT = 10000;
+
+  var actions = ["subscribeTo", "unsubscribeFrom", "listenTo", "unlistenFrom"];
 
   var Session = (function () {
     var Session = function Session(_ref2) {
+      var _this = this;
       var guid = _ref2.guid;
-      var uplink = _ref2.uplink;
-      var timeout = _ref2.timeout;
+      var activityTimeout = _ref2.activityTimeout;
+      activityTimeout = activityTimeout || DEFAULT_ACTIVITY_TIMEOUT;
       _.dev(function () {
-        return guid.should.be.a.String && uplink.should.be.an.instanceOf(UplinkSimpleServer) && timeout.should.be.a.Number.and.not.be.below(0);
+        return guid.should.be.a.String && activityTimeout.should.be.a.Number.and.not.be.below(0);
       });
-      _.extend(this, { guid: guid, uplink: uplink });
-      this.connections = {};
-
-      this.subscriptions = {};
-      this.listeners = {};
-
-      this.timeout = timeout;
-      this._timeout = null;
-      this.expired = false;
+      _.extend(this, {
+        events: new EventEmitter(),
+        _guid: guid,
+        _activityTimeout: activityTimeout,
+        _connections: {},
+        _subscriptions: {},
+        _listeners: {},
+        _expireTimeout: null });
+      this._isDestroyed = false;
       this.pause();
+      actions.forEach(function (action) {
+        return _this["_" + action] = _.scope(_this["_" + action], _this);
+      });
     };
 
     Session.prototype.destroy = function () {
-      var _this = this;
-      if (this.timeout !== null) {
-        clearTimeout(this.timeout);
+      var _this2 = this;
+      if (this._expireTimeout !== null) {
+        clearTimeout(this._expireTimeout);
+        this._expireTimeout = null;
       }
-      Object.keys(this.connections).forEach(function (id) {
-        return _this.detach(_this.connections[id]);
+      Object.keys(this._connections).forEach(function (id) {
+        return _this2.detachConnection(_this2._connections[id]);
       });
-      Object.keys(this.subscriptions).forEach(function (path) {
-        return _this.unsubscribeFrom(path);
-      });
-      Object.keys(this.listeners).forEach(function (room) {
-        return _this.unlistenFrom(room);
-      });
+      this._connections = null;
+      Object.keys(this._subscriptions).forEach(this._unsubscribeFrom);
+      this._subscriptions = null;
+      Object.keys(this._listeners).forEach(this._unlistenFrom);
+      this._listeners = null;
+      this.events.emit("destroy");
+      this.events.removeAllListeners();
+      this.events = null;
     };
 
     Session.prototype.proxy = function (method) {
       return _.scope(function () {
-        var _this2 = this;
+        var _this3 = this;
         var args = _slice.call(arguments);
 
-        return Object.keys(this.connections).map(function (id) {
-          return _this2.connections[id][method].apply(_this2.connections[id], _toArray(args));
+        return Object.keys(this._connections).map(function (id) {
+          return _this3.connections[id][method].apply(_this3.connections[id], _toArray(args));
         });
       }, this);
     };
 
-    Session.prototype.attach = function (connection) {
-      var _this3 = this;
+    Session.prototype.attachConnection = function (connection) {
+      var _this4 = this;
       _.dev(function () {
-        return connection.should.be.an.instanceOf(Connection) && (_this3.connections[connection.id] === void 0).should.be.ok;
+        return connection.should.be.an.instanceOf(Connection) && (_this4._connections[connection.id] === void 0).should.be.ok;
       });
-      this.connections[connection.id] = connection;
-      // If the session was paused (no connec attached)
-      // then resume it
-      if (this.paused) {
+      this._connections[connection.id] = connection;
+      actions.forEach(function (action) {
+        return connection.addListener(action, _this4["_" + action]);
+      });
+      if (this.isPaused) {
         this.resume();
       }
       return this;
     };
 
-    Session.prototype.expire = function () {
-      var _this4 = this;
-      this.expired = true;
+    Session.prototype.detachConnection = function (connection) {
+      var _this5 = this;
       _.dev(function () {
-        return console.warn("nexus-uplink-simple-server", "!!", "expire", _this4.guid);
+        return connection.should.be.an.instanceOf(Connection) && (_this5._connections[connection.id] !== void 0).should.be.ok && _this5._connections[connection.id].should.be.exactly(connection);
       });
-      return this.uplink.deleteSession(this);
+      delete this._connections[connection.id];
+      actions.forEach(function (action) {
+        return connection.removeListener(action, _this5["_" + action]);
+      });
+      if (Object.keys(this._connections).length === 0) {
+        this.pause();
+      }
+      return this;
     };
 
     Session.prototype.pause = function () {
-      var _this5 = this;
+      var _this6 = this;
+      this.isPaused.should.not.be.ok;
       _.dev(function () {
-        return _this5.paused.should.not.be.ok;
+        return Object.keys(_this6._connections).length.should.be.exactly(0);
       });
-      _.dev(function () {
-        return console.warn("nexus-uplink-simple-server", "!!", "pause", _this5.guid);
-      });
-      this._timeout = setTimeout(function () {
-        return _this5.expire();
-      }, this.timeout);
+      this._expireTimeout = setTimeout(function () {
+        return _this6._handleExpire();
+      }, this._activityTimeout);
+      this.events.emit("pause");
       return this;
     };
 
     Session.prototype.resume = function () {
-      var _this6 = this;
+      var _this7 = this;
+      this.isPaused.should.be.ok;
       _.dev(function () {
-        return _this6.paused.should.be.ok;
+        return Object.keys(_this7._connections).length.should.be.above(0);
       });
-      _.dev(function () {
-        return console.warn("nexus-uplink-simple-server", "!!", "resume", _this6.guid);
-      });
-      // Prevent the expiration timeout
-      clearTimeout(this._timeout);
-      this._timeout = null;
+      clearTimeout(this._expireTimeout);
+      this._expireTimeout = null;
+      this.events.emit("resume");
       return this;
     };
 
-    Session.prototype.detach = function (connection) {
-      var _this7 = this;
-      _.dev(function () {
-        return connection.should.be.an.instanceOf(Connection) && (_this7.connections[connection.id] !== void 0).should.be.ok && _this7.connections[connection.id].should.be.exactly(connection);
-      });
-      delete this.connections[connection.id];
-      // If this was the last connection, pause the session
-      // and start the expire countdown
-      if (Object.keys(this.connections).length === 0) {
-        this.pause();
-      }
-      return this;
+    Session.prototype._handleExpire = function () {
+      this.events.emit("expire");
     };
 
     Session.prototype.update = function (_ref3) {
       var path = _ref3.path;
       var diff = _ref3.diff;
       var hash = _ref3.hash;
-      return this.proxy("update")({ path: path, diff: diff, hash: hash });
-    };
-
-    Session.prototype.subscribeTo = function (path) {
-      var _this8 = this;
       _.dev(function () {
-        return path.should.be.a.String && (_this8.subscriptions[path] === void 0).should.be.ok;
+        return path.should.be.a.String;
       });
-      this.subscriptions[path] = true;
-      return this.uplink.subscribeTo(path, this);
-    };
-
-    Session.prototype.unsubscribeFrom = function (path) {
-      var _this9 = this;
-      _.dev(function () {
-        return path.should.be.a.String && (_this9.subscriptions[path] !== void 0).should.be.ok;
-      });
-      delete this.subscriptions[path];
-      return this.uplink.unsubscribeFrom(path, this);
+      if (this._subscriptions[path] !== void 0) {
+        this.proxy("update")({ path: path, diff: diff, hash: hash });
+      }
+      return this;
     };
 
     Session.prototype.emit = function (_ref4) {
       var room = _ref4.room;
       var params = _ref4.params;
-      return this.proxy("emit")({ room: room, params: params });
+      _.dev(function () {
+        return room.should.be.a.String && (params === null || _.isObject(params)).should.be.ok;
+      });
+      if (this._listeners[room] !== void 0) {
+        this.proxy("emit")({ room: room, params: params });
+      }
+      return this;
     };
 
-    Session.prototype.listenTo = function (room) {
-      var _this10 = this;
+    Session.prototype._subscribeTo = function (path) {
       _.dev(function () {
-        return room.should.be.a.String && (_this10.listeners[room] === void 0).should.be.ok;
+        return path.should.be.a.String;
       });
-      this.listeners[room] = true;
-      return this.uplink.listenTo(room, this);
+      if (this._subscriptions[path] !== void 0) {
+        return this;
+      }
+      this._subscriptions[path] = true;
+      this.events.emit("subscribeTo", path);
+      return this;
     };
 
-    Session.prototype.unlistenFrom = function (room) {
-      var _this11 = this;
+    Session.prototype._unsubscribeFrom = function (path) {
+      var _this8 = this;
       _.dev(function () {
-        return room.should.be.a.String && (_this11.listeners[room] !== void 0).should.be.ok;
+        return path.should.be.a.String && (_this8._subscriptions[path] !== void 0).should.be.ok;
       });
-      delete this.listeners[room];
-      return this.uplink.unlistenFrom(room, this);
+      delete this._subscriptions[path];
+      this.events.emit("unsubscribeFrom", path);
+      return this;
+    };
+
+    Session.prototype._listenTo = function (room) {
+      _.dev(function () {
+        return room.should.be.a.String;
+      });
+      if (this._listeners[room] !== void 0) {
+        return this;
+      }
+      this._listeners[room] = true;
+      this.events.emit("listenTo", room);
+      return this;
+    };
+
+    Session.prototype._unlistenFrom = function (room) {
+      var _this9 = this;
+      _.dev(function () {
+        return room.should.be.a.String && (_this9._listeners[room] !== void 0).should.be.ok;
+      });
+      delete this._listeners[room];
+      this.events.emit("unlistenFrom", room);
+      return this;
     };
 
     Session.prototype.debug = function () {
@@ -201,9 +226,14 @@ require("6to5/polyfill");var Promise = (global || window).Promise = require("lod
     };
 
     _classProps(Session, null, {
-      paused: {
+      guid: {
         get: function () {
-          return (this._timeout !== null);
+          return this._guid;
+        }
+      },
+      isPaused: {
+        get: function () {
+          return (this._expireTimeout !== null);
         }
       }
     });
@@ -212,14 +242,13 @@ require("6to5/polyfill");var Promise = (global || window).Promise = require("lod
   })();
 
   _.extend(Session.prototype, {
-    guid: null,
-    uplink: null,
-    connections: null,
-    timeout: null,
-    _timeout: null,
-    expired: null,
-    subscriptions: null,
-    listeners: null });
+    events: null,
+    _guid: null,
+    _activityTimeout: null,
+    _connections: null,
+    _subscriptions: null,
+    _listeners: null,
+    _expireTimeout: null });
 
   return Session;
 };
