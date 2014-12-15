@@ -146,7 +146,7 @@ class UplinkSimpleServer {
       if(this._stores.match(req.path) === null) {
         throw new HTTPExceptions.NotFound(req.path);
       }
-      return this._pull(req.path)
+      return this.pull(req.path)
       .then((value) => {
         _.dev(() => (value === null || _.isObject(value)).should.be.ok);
         _.dev(() => console.warn('nexus-uplink-simple-server', '>>', 'GET', req.path, value));

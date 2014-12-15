@@ -172,7 +172,7 @@ var UplinkSimpleServer = (function () {
       if (_this7._stores.match(req.path) === null) {
         throw new HTTPExceptions.NotFound(req.path);
       }
-      return _this7._pull(req.path).then(function (value) {
+      return _this7.pull(req.path).then(function (value) {
         _.dev(function () {
           return (value === null || _.isObject(value)).should.be.ok;
         });
