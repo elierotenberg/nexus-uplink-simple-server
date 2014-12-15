@@ -53,7 +53,7 @@ module.exports = function({ Connection }) {
     // Just proxy the invocation to all attached connections, which implement the same APIs.
     proxy(method) {
       return _.scope(function(...args) {
-        return Object.keys(this._connections).map((id) => this.connections[id][method](...args));
+        return Object.keys(this._connections).map((id) => this._connections[id][method](...args));
       }, this);
     }
 

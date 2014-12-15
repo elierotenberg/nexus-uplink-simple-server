@@ -68,7 +68,7 @@ require("6to5/polyfill");var Promise = (global || window).Promise = require("lod
         var args = _slice.call(arguments);
 
         return Object.keys(this._connections).map(function (id) {
-          return _this3.connections[id][method].apply(_this3.connections[id], _toArray(args));
+          return _this3._connections[id][method].apply(_this3._connections[id], _toArray(args));
         });
       }, this);
     };
