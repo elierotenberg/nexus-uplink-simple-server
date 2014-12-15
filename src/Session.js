@@ -62,7 +62,7 @@ module.exports = function({ Connection }) {
         (this._connections[connection.id] === void 0).should.be.ok
       );
       this._connections[connection.id] = connection;
-      actions.forEach((action) => connection.addListener(action, this[`_${action}`]));
+      actions.forEach((action) => connection.events.addListener(action, this[`_${action}`]));
       if(this.isPaused) {
         this.resume();
       }
@@ -75,7 +75,7 @@ module.exports = function({ Connection }) {
         this._connections[connection.id].should.be.exactly(connection)
       );
       delete this._connections[connection.id];
-      actions.forEach((action) => connection.removeListener(action, this[`_${action}`]));
+      actions.forEach((action) => connection.events.removeListener(action, this[`_${action}`]));
       if(Object.keys(this._connections).length === 0) {
         this.pause();
       }

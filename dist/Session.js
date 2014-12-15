@@ -80,7 +80,7 @@ require("6to5/polyfill");var Promise = (global || window).Promise = require("lod
       });
       this._connections[connection.id] = connection;
       actions.forEach(function (action) {
-        return connection.addListener(action, _this4["_" + action]);
+        return connection.events.addListener(action, _this4["_" + action]);
       });
       if (this.isPaused) {
         this.resume();
@@ -95,7 +95,7 @@ require("6to5/polyfill");var Promise = (global || window).Promise = require("lod
       });
       delete this._connections[connection.id];
       actions.forEach(function (action) {
-        return connection.removeListener(action, _this5["_" + action]);
+        return connection.events.removeListener(action, _this5["_" + action]);
       });
       if (Object.keys(this._connections).length === 0) {
         this.pause();
