@@ -136,7 +136,7 @@ class UplinkSimpleServer {
   // Private methods
 
   _bindIOHandlers() {
-    this._io.attach(this.server);
+    this._io.attach(this._server);
     this._io.on('connection', (socket) => this._handleConnection(socket));
   }
 
