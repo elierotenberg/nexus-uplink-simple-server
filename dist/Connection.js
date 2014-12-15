@@ -20,17 +20,19 @@ var HANDSHAKE_TIMEOUT = 5000;
 var Connection = (function () {
   var Connection = function Connection(_ref) {
     var _this = this;
+    var pid = _ref.pid;
     var socket = _ref.socket;
     var stringify = _ref.stringify;
     var handshakeTimeout = _ref.handshakeTimeout;
     handshakeTimeout = handshakeTimeout || HANDSHAKE_TIMEOUT;
     _.dev(function () {
-      return instanceOfEngineIOSocket(socket).should.be.ok && stringify.should.be.a.Function && handshakeTimeout.should.be.a.Number.and.not.be.below(0);
+      return pid.should.be.a.String && instanceOfEngineIOSocket(socket).should.be.ok && stringify.should.be.a.Function && handshakeTimeout.should.be.a.Number.and.not.be.below(0);
     });
     _.extend(this, {
       events: new EventEmitter(),
       _isDestroyed: false,
       _isConnected: false,
+      _pid: pid,
       _guid: null,
       _session: null,
       _socket: socket,
@@ -168,7 +170,7 @@ var Connection = (function () {
     guid.should.be.a.String;
     this._isConnected = true;
     this.events.emit("handshake", { guid: guid });
-    this._handshakeAck({ pid: this.uplink.pid });
+    this._handshakeAck({ pid: this._pid });
   };
 
   Connection.prototype._handleMessageSubscribeTo = function (_ref6) {

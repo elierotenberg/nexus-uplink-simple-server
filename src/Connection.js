@@ -6,9 +6,10 @@ const EventEmitter = require('events').EventEmitter;
 const HANDSHAKE_TIMEOUT = 5000;
 
 class Connection {
-  constructor({ socket, stringify, handshakeTimeout }) {
+  constructor({ pid, socket, stringify, handshakeTimeout }) {
     handshakeTimeout = handshakeTimeout || HANDSHAKE_TIMEOUT;
-    _.dev(() => instanceOfEngineIOSocket(socket).should.be.ok &&
+    _.dev(() => pid.should.be.a.String &&
+      instanceOfEngineIOSocket(socket).should.be.ok &&
       stringify.should.be.a.Function &&
       handshakeTimeout.should.be.a.Number.and.not.be.below(0)
     );
@@ -16,6 +17,7 @@ class Connection {
       events: new EventEmitter(),
       _isDestroyed: false,
       _isConnected: false,
+      _pid: pid,
       _guid: null,
       _session: null,
       _socket: socket,
@@ -130,7 +132,7 @@ class Connection {
     guid.should.be.a.String;
     this._isConnected = true;
     this.events.emit('handshake', { guid });
-    this._handshakeAck({ pid: this.uplink.pid });
+    this._handshakeAck({ pid: this._pid });
   }
 
   _handleMessageSubscribeTo({ path }) {

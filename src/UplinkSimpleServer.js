@@ -210,6 +210,7 @@ class UplinkSimpleServer {
       (this._connections[socket.id] === void 0).should.be.ok
     );
     const connection = new Connection({
+      pid: this._pid,
       socket,
       stringify: (obj) => this._stringify(obj),
       handshakeTimeout: this._handshakeTimeout,

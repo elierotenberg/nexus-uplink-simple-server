@@ -257,6 +257,7 @@ var UplinkSimpleServer = (function () {
       return instanceOfEngineIOSocket(socket).should.be.ok && (_this10._connections[socket.id] === void 0).should.be.ok;
     });
     var connection = new Connection({
+      pid: this._pid,
       socket: socket,
       stringify: function (obj) {
         return _this10._stringify(obj);
