@@ -224,6 +224,7 @@ class UplinkSimpleServer {
   }
 
   _handleDisconnection(socketId) {
+    _.dev(() => console.warn('nexus-uplink-simple-server', '<<', 'disconnection', socketId));
     _.dev(() => socketId.should.be.a.String &&
       (this._connections[socketId] !== void 0).should.be.ok &&
       this._connections[socketId].connection.id.should.be.exactly(socketId)

@@ -93,10 +93,10 @@ require("6to5/polyfill");var Promise = (global || window).Promise = require("lod
       _.dev(function () {
         return connection.should.be.an.instanceOf(Connection) && (_this5._connections[connection.id] !== void 0).should.be.ok && _this5._connections[connection.id].should.be.exactly(connection);
       });
-      delete this._connections[connection.id];
       actions.forEach(function (action) {
         return connection.events.removeListener(action, _this5["_" + action]);
       });
+      delete this._connections[connection.id];
       if (Object.keys(this._connections).length === 0) {
         this.pause();
       }

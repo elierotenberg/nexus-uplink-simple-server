@@ -287,6 +287,9 @@ var UplinkSimpleServer = (function () {
   UplinkSimpleServer.prototype._handleDisconnection = function (socketId) {
     var _this11 = this;
     _.dev(function () {
+      return console.warn("nexus-uplink-simple-server", "<<", "disconnection", socketId);
+    });
+    _.dev(function () {
       return socketId.should.be.a.String && (_this11._connections[socketId] !== void 0).should.be.ok && _this11._connections[socketId].connection.id.should.be.exactly(socketId);
     });
     var connection = this._connections[socketId].connection;
