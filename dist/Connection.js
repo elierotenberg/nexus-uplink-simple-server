@@ -31,7 +31,6 @@ var Connection = (function () {
     _.extend(this, {
       events: new EventEmitter(),
       _isDestroyed: false,
-      _isConnected: false,
       _pid: pid,
       _guid: null,
       _session: null,
@@ -117,21 +116,29 @@ var Connection = (function () {
     this.push.apply(this, ["err"].concat(_toArray(args)));
   };
 
+  Connection.prototype._handshakeTimeoutExpire = function () {
+    var _this4 = this;
+    _.dev(function () {
+      return console.warn("nexus-uplink-simple-server", _this4._socket.id, "handshakeTimeout");
+    });
+    this._socket.close();
+  };
+
   Connection.prototype._handleClose = function () {
     this.events.emit("close");
   };
 
   Connection.prototype._handleError = function (err) {
-    var _this4 = this;
+    var _this5 = this;
     _.dev(function () {
-      return console.error("nexus-uplink-simple-server", _this4._socket.id, "<<", err.toString());
+      return console.error("nexus-uplink-simple-server", _this5._socket.id, "<<", err.toString());
     });
   };
 
   Connection.prototype._handleMessage = function (json) {
-    var _this5 = this;
+    var _this6 = this;
     _.dev(function () {
-      return console.warn("nexus-uplink-simple-server", _this5._socket.id, "<<", json);
+      return console.warn("nexus-uplink-simple-server", _this6._socket.id, "<<", json);
     });
     _.dev(function () {
       return json.should.be.a.String;
@@ -144,31 +151,36 @@ var Connection = (function () {
       event.should.be.a.String;
       (params === null || _.isObject(params)).should.be.ok;
       if (event === "handshake") {
-        return _this5._handleMessageHanshake(params);
+        return _this6._handleMessageHanshake(params);
       }
       if (event === "subscribeTo") {
-        return _this5._handleMessageSubscribeTo(params);
+        return _this6._handleMessageSubscribeTo(params);
       }
       if (event === "unsubscribeFrom") {
-        return _this5._handleMessageUnsubscribeFrom(params);
+        return _this6._handleMessageUnsubscribeFrom(params);
       }
       if (event === "listenTo") {
-        return _this5._handleMessageListenTo(params);
+        return _this6._handleMessageListenTo(params);
       }
       if (event === "unlistenFrom") {
-        return _this5._handleMessageUnlistenFrom(params);
+        return _this6._handleMessageUnlistenFrom(params);
       }
       throw new Error("Unknown event type: " + event);
     })["catch"](function (err) {
-      return _this5._throw(err);
+      return _this6._throw(err);
     });
   };
 
   Connection.prototype._handleMessageHanshake = function (_ref5) {
+    var _this7 = this;
     var guid = _ref5.guid;
     this.isConnected.should.not.be.ok;
     guid.should.be.a.String;
-    this._isConnected = true;
+    clearTimeout(this._handshakeTimeout);
+    this._handshakeTimeout = null;
+    _.dev(function () {
+      return _this7.isConnected.should.be.ok;
+    });
     this.events.emit("handshake", { guid: guid });
     this._handshakeAck({ pid: this._pid });
   };
@@ -221,7 +233,7 @@ var Connection = (function () {
     },
     isConnected: {
       get: function () {
-        return !!this._isConnected;
+        return (this._handshakeTimeout === null);
       }
     },
     id: {
@@ -237,7 +249,6 @@ var Connection = (function () {
 _.extend(Connection.prototype, {
   events: null,
   _isDestroyed: null,
-  _isConnected: null,
   _handshakeTimeout: null,
   _socket: null,
   _stringify: null });

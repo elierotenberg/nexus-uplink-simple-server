@@ -16,7 +16,6 @@ class Connection {
     _.extend(this, {
       events: new EventEmitter(),
       _isDestroyed: false,
-      _isConnected: false,
       _pid: pid,
       _guid: null,
       _session: null,
@@ -35,7 +34,7 @@ class Connection {
   }
 
   get isConnected() {
-    return !!this._isConnected;
+    return (this._handshakeTimeout === null);
   }
 
   get id() {
@@ -93,6 +92,11 @@ class Connection {
     this.push('err', ...args);
   }
 
+  _handshakeTimeoutExpire() {
+    _.dev(() => console.warn('nexus-uplink-simple-server', this._socket.id, 'handshakeTimeout'));
+    this._socket.close();
+  }
+
   _handleClose() {
     this.events.emit('close');
   }
@@ -130,7 +134,9 @@ class Connection {
   _handleMessageHanshake({ guid }) {
     this.isConnected.should.not.be.ok;
     guid.should.be.a.String;
-    this._isConnected = true;
+    clearTimeout(this._handshakeTimeout);
+    this._handshakeTimeout = null;
+    _.dev(() => this.isConnected.should.be.ok);
     this.events.emit('handshake', { guid });
     this._handshakeAck({ pid: this._pid });
   }
@@ -172,7 +178,6 @@ class Connection {
 _.extend(Connection.prototype, {
   events: null,
   _isDestroyed: null,
-  _isConnected: null,
   _handshakeTimeout: null,
   _socket: null,
   _stringify: null,
