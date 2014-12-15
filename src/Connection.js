@@ -41,6 +41,11 @@ class Connection {
     return this._socket.id;
   }
 
+  get guid() {
+    _.dev(() => this.isConnected.should.be.ok);
+    return this._guid;
+  }
+
   push(event, params) {
     this.isDestroyed.should.not.be.ok;
     _.dev(() => event.should.be.a.String &&
@@ -53,6 +58,10 @@ class Connection {
   destroy() {
     this.isDestroyed.should.not.be.ok;
     _.dev(() => console.warn('nexus-uplink-simple-server', this._socket.id, '!!', 'destroy'));
+    if(this.isConnected) {
+      clearTimeout(this._handshakeTimeout);
+      this._handshakeTimeout = null;
+    }
     this.events.removeAllListeners();
     this.events = null;
     this._socket.removeListener('close', this._handleClose);
@@ -136,6 +145,7 @@ class Connection {
     guid.should.be.a.String;
     clearTimeout(this._handshakeTimeout);
     this._handshakeTimeout = null;
+    this._guid = guid;
     _.dev(() => this.isConnected.should.be.ok);
     this.events.emit('handshake', { guid });
     this._handshakeAck({ pid: this._pid });

@@ -308,6 +308,9 @@ var UplinkSimpleServer = (function () {
       return socketId.should.be.a.String && guid.should.be.a.String && (_this12._connections[socketId] !== void 0).should.be.ok;
     });
     var connection = this._connections[socketId].connection;
+    _.dev(function () {
+      return connection.guid.should.be.exactly(guid);
+    });
     if (this._sessions[guid] === void 0) {
       (function () {
         var session = new Session({ guid: guid, activityTimeout: _this12._activityTimeout });

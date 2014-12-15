@@ -243,6 +243,7 @@ class UplinkSimpleServer {
       (this._connections[socketId] !== void 0).should.be.ok
     );
     const { connection } = this._connections[socketId];
+    _.dev(() => connection.guid.should.be.exactly(guid));
     if(this._sessions[guid] === void 0) {
       const session = new Session({ guid, activityTimeout: this._activityTimeout });
       const handlers = {

@@ -65,6 +65,10 @@ var Connection = (function () {
     _.dev(function () {
       return console.warn("nexus-uplink-simple-server", _this3._socket.id, "!!", "destroy");
     });
+    if (this.isConnected) {
+      clearTimeout(this._handshakeTimeout);
+      this._handshakeTimeout = null;
+    }
     this.events.removeAllListeners();
     this.events = null;
     this._socket.removeListener("close", this._handleClose);
@@ -178,6 +182,7 @@ var Connection = (function () {
     guid.should.be.a.String;
     clearTimeout(this._handshakeTimeout);
     this._handshakeTimeout = null;
+    this._guid = guid;
     _.dev(function () {
       return _this7.isConnected.should.be.ok;
     });
@@ -239,6 +244,15 @@ var Connection = (function () {
     id: {
       get: function () {
         return this._socket.id;
+      }
+    },
+    guid: {
+      get: function () {
+        var _this8 = this;
+        _.dev(function () {
+          return _this8.isConnected.should.be.ok;
+        });
+        return this._guid;
       }
     }
   });
