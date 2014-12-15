@@ -157,7 +157,7 @@ var UplinkSimpleServer = (function () {
 
   UplinkSimpleServer.prototype._bindIOHandlers = function () {
     var _this6 = this;
-    this._io.attach(this.server);
+    this._io.attach(this._server);
     this._io.on("connection", function (socket) {
       return _this6._handleConnection(socket);
     });
