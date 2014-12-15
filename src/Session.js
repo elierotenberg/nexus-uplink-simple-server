@@ -1,6 +1,6 @@
 module.exports = function({ Connection }) {
   const _ = require('lodash-next');
-  const EventEmitter = require('event').EventEmitter;
+  const EventEmitter = require('events').EventEmitter;
 
   const DEFAULT_ACTIVITY_TIMEOUT = 10000;
 

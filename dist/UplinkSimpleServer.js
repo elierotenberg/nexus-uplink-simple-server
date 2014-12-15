@@ -96,24 +96,83 @@ var UplinkSimpleServer = (function () {
     })();
   };
 
-  UplinkSimpleServer.prototype._bindIOHandlers = function () {
+  UplinkSimpleServer.prototype.pull = function (path) {
     var _this2 = this;
+    return Promise["try"](function () {
+      _.dev(function () {
+        return path.should.be.a.String && (_this2._stores.match(path) !== null).should.be.ok;
+      });
+      var value = _this2._storesCache[path];
+      return value === void 0 ? null : value;
+    });
+  };
+
+  UplinkSimpleServer.prototype.update = function (path, value) {
+    var _this3 = this;
+    return Promise["try"](function () {
+      _.dev(function () {
+        return path.should.be.a.String && (value === null || _.isObject(value)).should.be.ok && (_this3._stores.match(path) !== null).should.be.ok;
+      });
+      var previousValue = _this3._storesCache[path];
+      _this3._storesCache[path] = value;
+      if (_this3._subscribers[path] !== void 0) {
+        var _ref2 = (previousValue !== void 0 && previousValue !== null && value !== null) ? [_.hash(previousValue), _.diff(previousValue, value)] : [null, {}];
+        var _ref3 = _toArray(_ref2);
+
+        var hash = _ref3[0];
+        var diff = _ref3[1];
+        return Promise.map(Object.keys(_this3._subscribers[path]), function (k) {
+          return _this3._subscribers[path][k].update({ path: path, diff: diff, hash: hash });
+        });
+      }
+    });
+  };
+
+  UplinkSimpleServer.prototype.emit = function (room, params) {
+    var _this4 = this;
+    return Promise["try"](function () {
+      _.dev(function () {
+        return room.should.be.a.String && (params === null || _.isObject(params)).should.be.ok && (_this4._rooms.match(room) !== null).should.be.ok;
+      });
+      if (_this4._listeners[room] !== void 0) {
+        return Promise.map(Object.keys(_this4._listeners[room]), function (k) {
+          return _this4._listeners[room][k].emit({ room: room, params: params });
+        });
+      }
+    });
+  };
+
+  UplinkSimpleServer.prototype.dispatch = function (action, params) {
+    var _this5 = this;
+    return Promise["try"](function () {
+      params = params === void 0 ? {} : params;
+      _.dev(function () {
+        return action.should.be.a.String && (params === null || _.isObject(params)).should.be.ok && (_this5._actions.match(action) !== null).should.be.ok;
+      });
+      var handlers = _this5.actions.listeners(action).length;
+      _this5.actions.emit(action, params);
+      return { handlers: handlers };
+    });
+  };
+
+  UplinkSimpleServer.prototype._bindIOHandlers = function () {
+    var _this6 = this;
     this._io.attach(this.server);
     this._io.on("connection", function (socket) {
-      return _this2._handleConnection(socket);
+      return _this6._handleConnection(socket);
     });
   };
 
   UplinkSimpleServer.prototype._handleGET = function (req, res) {
-    var _this3 = this;
+    var _this7 = this;
     Promise["try"](function () {
       _.dev(function () {
         return console.warn("nexus-uplink-simple-server", "<<", "GET", req.path);
       });
-      if (_this3._stores.match(req.path) === null) {
+      if (_this7._stores.match(req.path) === null) {
         throw new HTTPExceptions.NotFound(req.path);
       }
-      return _this3._pull(req.path).then(function (value) {
+      return _this7._pull(req.path).then(function (value) {
         _.dev(function () {
           return (value === null || _.isObject(value)).should.be.ok;
         });
@@ -138,12 +197,12 @@ var UplinkSimpleServer = (function () {
   };
 
   UplinkSimpleServer.prototype._handlePOST = function (req, res) {
-    var _this4 = this;
+    var _this8 = this;
     Promise["try"](function () {
       _.dev(function () {
         return console.warn("nexus-uplink-simple-server", "<<", "POST", req.path, req.body);
       });
-      if (_this4._actions.match(req.path) === null) {
+      if (_this8._actions.match(req.path) === null) {
         throw new HTTPExceptions.NotFound(req.path);
       }
       if (req.body.params === void 0) {
@@ -155,10 +214,10 @@ var UplinkSimpleServer = (function () {
       if (req.body.params.guid === void 0) {
         throw new HTTPExceptions.BadRequest("Missing required field: 'params'.'guid'.");
       }
-      if (!_this4.isActiveSession(req.body.params.guid)) {
+      if (!_this8.isActiveSession(req.body.params.guid)) {
         throw new HTTPExceptions.Unauthorized("Invalid guid: " + req.body.params.guid);
       }
-      return _this4.dispatch(req.path, req.body.params).then(function (result) {
+      return _this8.dispatch(req.path, req.body.params).then(function (result) {
         _.dev(function () {
           return console.warn("nexus-uplink-simple-server", ">>", "POST", req.path, req.body, result);
         });
@@ -180,36 +239,36 @@ var UplinkSimpleServer = (function () {
   };
 
   UplinkSimpleServer.prototype._bindHTTPHandlers = function () {
-    var _this5 = this;
+    var _this9 = this;
     this._app.get("*", function (req, res) {
-      return _this5._handleGET(req, res);
+      return _this9._handleGET(req, res);
     });
     this._app.post("*", bodyParser.json(), function (req, res) {
-      return _this5._handlePOST(req, res);
+      return _this9._handlePOST(req, res);
     });
   };
 
   UplinkSimpleServer.prototype._handleConnection = function (socket) {
-    var _this6 = this;
+    var _this10 = this;
     _.dev(function () {
       return console.warn("nexus-uplink-simple-server", "<<", "connection", socket.id);
     });
     _.dev(function () {
-      return instanceOfEngineIOSocket(socket).should.be.ok && (_this6._connections[socket.id] === void 0).should.be.ok;
+      return instanceOfEngineIOSocket(socket).should.be.ok && (_this10._connections[socket.id] === void 0).should.be.ok;
     });
     var connection = new Connection({
       socket: socket,
       stringify: function (obj) {
-        return _this6._stringify(obj);
+        return _this10._stringify(obj);
       },
       handshakeTimeout: this._handshakeTimeout });
     var handlers = {
       close: function () {
-        return _this6._handleDisconnection(socket.id);
+        return _this10._handleDisconnection(socket.id);
       },
-      handshake: function (_ref2) {
-        var guid = _ref2.guid;
-        return _this6._handleHandshake(socket.id, { guid: guid });
+      handshake: function (_ref4) {
+        var guid = _ref4.guid;
+        return _this10._handleHandshake(socket.id, { guid: guid });
       } };
     Object.keys(handlers).forEach(function (event) {
       return connection.events.addListener(event, handlers[event]);
@@ -218,9 +277,9 @@ var UplinkSimpleServer = (function () {
   };
 
   UplinkSimpleServer.prototype._handleDisconnection = function (socketId) {
-    var _this7 = this;
+    var _this11 = this;
     _.dev(function () {
-      return socketId.should.be.a.String && (_this7._connections[socketId] !== void 0).should.be.ok && _this7._connections[socketId].connection.id.should.be.exactly(socketId);
+      return socketId.should.be.a.String && (_this11._connections[socketId] !== void 0).should.be.ok && _this11._connections[socketId].connection.id.should.be.exactly(socketId);
     });
     var connection = this._connections[socketId].connection;
     var handlers = this._connections[socketId].handlers;
@@ -234,52 +293,52 @@ var UplinkSimpleServer = (function () {
     delete this._connections[socketId];
   };
 
-  UplinkSimpleServer.prototype._handleHandshake = function (socketId, _ref3) {
-    var _this8 = this;
-    var guid = _ref3.guid;
+  UplinkSimpleServer.prototype._handleHandshake = function (socketId, _ref5) {
+    var _this12 = this;
+    var guid = _ref5.guid;
     _.dev(function () {
-      return socketId.should.be.a.String && guid.should.be.a.String && (_this8._connections[socketId] !== void 0).should.be.ok;
+      return socketId.should.be.a.String && guid.should.be.a.String && (_this12._connections[socketId] !== void 0).should.be.ok;
     });
     var connection = this._connections[socketId].connection;
     if (this._sessions[guid] === void 0) {
       (function () {
-        var session = new Session({ guid: guid, activityTimeout: _this8._activityTimeout });
+        var session = new Session({ guid: guid, activityTimeout: _this12._activityTimeout });
         var handlers = {
           expire: function () {
-            return _this8._handleExpire(guid);
+            return _this12._handleExpire(guid);
           },
           pause: function () {
-            return _this8._handlePause(guid);
+            return _this12._handlePause(guid);
           },
           resume: function () {
-            return _this8._handleResume(guid);
+            return _this12._handleResume(guid);
           },
           subscribeTo: function (path) {
-            return _this8._handleSubscribeTo(guid, path);
+            return _this12._handleSubscribeTo(guid, path);
           },
           unsubscribeFrom: function (path) {
-            return _this8._handleUnsubscribeFrom(guid, path);
+            return _this12._handleUnsubscribeFrom(guid, path);
           },
           listenTo: function (room) {
-            return _this8._handleListenTo(guid, room);
+            return _this12._handleListenTo(guid, room);
           },
           unlistenFrom: function (room) {
-            return _this8._handleUnlistenFrom(guid, room);
+            return _this12._handleUnlistenFrom(guid, room);
           } };
-        _this8._sessions[guid] = { session: session, handlers: handlers };
+        _this12._sessions[guid] = { session: session, handlers: handlers };
         Object.keys(handlers).forEach(function (event) {
           return session.events.addListener(event, handlers[event]);
         });
-        _this8.events.emit("create", { guid: guid });
+        _this12.events.emit("create", { guid: guid });
       })();
     }
     this._sessions[guid].session.attachConnection(connection);
   };
 
   UplinkSimpleServer.prototype._handleExpire = function (guid) {
-    var _this9 = this;
+    var _this13 = this;
     _.dev(function () {
-      return guid.should.be.a.String && (_this9._sessions[guid] !== void 0).should.be.ok;
+      return guid.should.be.a.String && (_this13._sessions[guid] !== void 0).should.be.ok;
     });
     var session = this._sessions[guid].session;
     var handlers = this._sessions[guid].handlers;
@@ -292,25 +351,25 @@ var UplinkSimpleServer = (function () {
   };
 
   UplinkSimpleServer.prototype._handlePause = function (guid) {
-    var _this10 = this;
+    var _this14 = this;
     _.dev(function () {
-      return guid.should.be.a.String && (_this10._sessions[guid] !== void 0).should.be.ok;
+      return guid.should.be.a.String && (_this14._sessions[guid] !== void 0).should.be.ok;
     });
     this.events.emit("pause", guid);
   };
 
   UplinkSimpleServer.prototype._handleResume = function (guid) {
-    var _this11 = this;
+    var _this15 = this;
     _.dev(function () {
-      return guid.should.be.a.String && (_this11._sessions[guid] !== void 0).should.be.ok;
+      return guid.should.be.a.String && (_this15._sessions[guid] !== void 0).should.be.ok;
     });
     this.events.emit("resume", guid);
   };
 
   UplinkSimpleServer.prototype._handleSubscribeTo = function (guid, path) {
-    var _this12 = this;
+    var _this16 = this;
     _.dev(function () {
-      return guid.should.be.a.String && path.should.be.a.String && (_this12._sessions[guid] !== void 0).should.be.ok;
+      return guid.should.be.a.String && path.should.be.a.String && (_this16._sessions[guid] !== void 0).should.be.ok;
     });
     if (this._subscribers[path] === void 0) {
       this._subscribers[path] = {};
@@ -323,9 +382,9 @@ var UplinkSimpleServer = (function () {
   };
 
   UplinkSimpleServer.prototype._handleUnsubscribeFrom = function (guid, path) {
-    var _this13 = this;
+    var _this17 = this;
     _.dev(function () {
-      return guid.should.be.a.String && path.should.be.a.String && (_this13._sessions[guid] !== void 0).should.be.ok;
+      return guid.should.be.a.String && path.should.be.a.String && (_this17._sessions[guid] !== void 0).should.be.ok;
     });
     if (this._subscribers[path] !== void 0) {
       if (this._subscribers[path][guid] !== void 0) {
@@ -339,9 +398,9 @@ var UplinkSimpleServer = (function () {
   };
 
   UplinkSimpleServer.prototype._handleListenTo = function (guid, room) {
-    var _this14 = this;
+    var _this18 = this;
     _.dev(function () {
-      return guid.should.be.a.String && room.should.be.a.String && (_this14._sessions[guid] !== void 0).should.be.ok;
+      return guid.should.be.a.String && room.should.be.a.String && (_this18._sessions[guid] !== void 0).should.be.ok;
     });
     if (this._listeners[room] === void 0) {
       this._listeners[room] = {};
@@ -354,9 +413,9 @@ var UplinkSimpleServer = (function () {
   };
 
   UplinkSimpleServer.prototype._handleUnlistenFrom = function (guid, room) {
-    var _this15 = this;
+    var _this19 = this;
     _.dev(function () {
-      return guid.should.be.a.String && room.should.be.a.String && (_this15._sessions[guid] !== void 0).should.be.ok;
+      return guid.should.be.a.String && room.should.be.a.String && (_this19._sessions[guid] !== void 0).should.be.ok;
     });
     if (this._listeners[room] !== void 0) {
       if (this._listeners[room][guid] !== void 0) {
@@ -374,65 +433,6 @@ var UplinkSimpleServer = (function () {
       return object.should.be.an.Object;
     });
     return this._jsonCache.stringify(object);
-  };
-
-  UplinkSimpleServer.prototype.pull = function (path) {
-    var _this16 = this;
-    return Promise["try"](function () {
-      _.dev(function () {
-        return path.should.be.a.String && (_this16._stores.match(path) !== null).should.be.ok;
-      });
-      var value = _this16._storesCache[path];
-      return value === void 0 ? null : value;
-    });
-  };
-
-  UplinkSimpleServer.prototype.update = function (path, value) {
-    var _this17 = this;
-    return Promise["try"](function () {
-      _.dev(function () {
-        return path.should.be.a.String && (value === null || _.isObject(value)).should.be.ok && (_this17._stores.match(path) !== null).should.be.ok;
-      });
-      var previousValue = _this17._storesCache[path];
-      _this17._storesCache[path] = value;
-      if (_this17._subscribers[path] !== void 0) {
-        var _ref4 = (previousValue !== void 0 && previousValue !== null && value !== null) ? [_.hash(previousValue), _.diff(previousValue, value)] : [null, {}];
-        var _ref5 = _toArray(_ref4);
-
-        var hash = _ref5[0];
-        var diff = _ref5[1];
-        return Promise.map(Object.keys(_this17._subscribers[path]), function (k) {
-          return _this17._subscribers[path][k].update({ path: path, diff: diff, hash: hash });
-        });
-      }
-    });
-  };
-
-  UplinkSimpleServer.prototype.emit = function (room, params) {
-    var _this18 = this;
-    return Promise["try"](function () {
-      _.dev(function () {
-        return room.should.be.a.String && (params === null || _.isObject(params)).should.be.ok && (_this18._rooms.match(room) !== null).should.be.ok;
-      });
-      if (_this18._listeners[room] !== void 0) {
-        return Promise.map(Object.keys(_this18._listeners[room]), function (k) {
-          return _this18._listeners[room][k].emit({ room: room, params: params });
-        });
-      }
-    });
-  };
-
-  UplinkSimpleServer.prototype.dispatch = function (action, params) {
-    var _this19 = this;
-    return Promise["try"](function () {
-      params = params === void 0 ? {} : params;
-      _.dev(function () {
-        return action.should.be.a.String && (params === null || _.isObject(params)).should.be.ok && (_this19._actions.match(action) !== null).should.be.ok;
-      });
-      var handlers = _this19.actions.listeners(action).length;
-      _this19.actions.emit(action, params);
-      return { handlers: handlers };
-    });
   };
 
   return UplinkSimpleServer;

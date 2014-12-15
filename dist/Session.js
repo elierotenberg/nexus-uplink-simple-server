@@ -13,7 +13,7 @@ var _classProps = function (child, staticProps, instanceProps) {
 require("6to5/polyfill");var Promise = (global || window).Promise = require("lodash-next").Promise;var __DEV__ = (process.env.NODE_ENV !== "production");var __PROD__ = !__DEV__;var __BROWSER__ = (typeof window === "object");var __NODE__ = !__BROWSER__;module.exports = function (_ref) {
   var Connection = _ref.Connection;
   var _ = require("lodash-next");
-  var EventEmitter = require("event").EventEmitter;
+  var EventEmitter = require("events").EventEmitter;
 
   var DEFAULT_ACTIVITY_TIMEOUT = 10000;
 
@@ -128,10 +128,6 @@ require("6to5/polyfill");var Promise = (global || window).Promise = require("lod
       return this;
     };
 
-    Session.prototype._handleExpire = function () {
-      this.events.emit("expire");
-    };
-
     Session.prototype.update = function (_ref3) {
       var path = _ref3.path;
       var diff = _ref3.diff;
@@ -155,6 +151,34 @@ require("6to5/polyfill");var Promise = (global || window).Promise = require("lod
         this.proxy("emit")({ room: room, params: params });
       }
       return this;
+    };
+
+    Session.prototype.debug = function () {
+      var args = _slice.call(arguments);
+
+      return this.proxy("debug").apply(null, _toArray(args));
+    };
+
+    Session.prototype.log = function () {
+      var args = _slice.call(arguments);
+
+      return this.proxy("log").apply(null, _toArray(args));
+    };
+
+    Session.prototype.warn = function () {
+      var args = _slice.call(arguments);
+
+      return this.proxy("warn").apply(null, _toArray(args));
+    };
+
+    Session.prototype.err = function () {
+      var args = _slice.call(arguments);
+
+      return this.proxy("err").apply(null, _toArray(args));
+    };
+
+    Session.prototype._handleExpire = function () {
+      this.events.emit("expire");
     };
 
     Session.prototype._subscribeTo = function (path) {
@@ -199,30 +223,6 @@ require("6to5/polyfill");var Promise = (global || window).Promise = require("lod
       delete this._listeners[room];
       this.events.emit("unlistenFrom", room);
       return this;
-    };
-
-    Session.prototype.debug = function () {
-      var args = _slice.call(arguments);
-
-      return this.proxy("debug").apply(null, _toArray(args));
-    };
-
-    Session.prototype.log = function () {
-      var args = _slice.call(arguments);
-
-      return this.proxy("log").apply(null, _toArray(args));
-    };
-
-    Session.prototype.warn = function () {
-      var args = _slice.call(arguments);
-
-      return this.proxy("warn").apply(null, _toArray(args));
-    };
-
-    Session.prototype.err = function () {
-      var args = _slice.call(arguments);
-
-      return this.proxy("err").apply(null, _toArray(args));
     };
 
     _classProps(Session, null, {
