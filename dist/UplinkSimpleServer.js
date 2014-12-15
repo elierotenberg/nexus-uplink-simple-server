@@ -294,11 +294,11 @@ var UplinkSimpleServer = (function () {
     if (connection.isConnected) {
       this._sessions[connection.guid].session.detachConnection(connection);
     }
-    connection.destroy();
     Object.keys(handlers).forEach(function (event) {
       return connection.events.removeListener(event, handlers[event]);
     });
     delete this._connections[socketId];
+    connection.destroy();
   };
 
   UplinkSimpleServer.prototype._handleHandshake = function (socketId, _ref9) {
