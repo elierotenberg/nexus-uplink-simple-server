@@ -360,11 +360,11 @@ var UplinkSimpleServer = (function () {
     });
     var session = this._sessions[guid].session;
     var handlers = this._sessions[guid].handlers;
-    session.destroy();
     Object.keys(handlers).forEach(function (event) {
       return session.events.removeListener(event, handlers[event]);
     });
     delete this._sessions[guid];
+    session.destroy();
     this.events.emit("delete", { guid: guid });
   };
 
