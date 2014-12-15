@@ -183,7 +183,7 @@ var UplinkSimpleServer = (function () {
       });
     })["catch"](function (err) {
       _.dev(function () {
-        return console.warn("nexus-uplink-simple-server", ">>", "GET", req.path, err);
+        return console.warn("nexus-uplink-simple-server", ">>", "GET", req.path, err.toString(), err.stack);
       });
       if (err instanceof HTTPExceptions.HTTPError) {
         return HTTPExceptions.forward(res, err);
@@ -225,7 +225,7 @@ var UplinkSimpleServer = (function () {
       });
     })["catch"](function (err) {
       _.dev(function () {
-        return console.warn("nexus-uplink-simple-server", ">>", "POST", req.path, req.body, err);
+        return console.warn("nexus-uplink-simple-server", ">>", "POST", req.path, req.body, err.toString(), err.stack);
       });
       if (err instanceof HTTPExceptions.HTTPError) {
         return HTTPExceptions.forward(res, err);

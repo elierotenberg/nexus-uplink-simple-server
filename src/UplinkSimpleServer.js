@@ -154,7 +154,7 @@ class UplinkSimpleServer {
       });
     })
     .catch((err) => {
-      _.dev(() => console.warn('nexus-uplink-simple-server', '>>', 'GET', req.path, err));
+      _.dev(() => console.warn('nexus-uplink-simple-server', '>>', 'GET', req.path, err.toString(), err.stack));
       if(err instanceof HTTPExceptions.HTTPError) {
         return HTTPExceptions.forward(res, err);
       }
@@ -189,7 +189,7 @@ class UplinkSimpleServer {
       });
     })
     .catch((err) => {
-      _.dev(() => console.warn('nexus-uplink-simple-server', '>>', 'POST', req.path, req.body, err));
+      _.dev(() => console.warn('nexus-uplink-simple-server', '>>', 'POST', req.path, req.body, err.toString(), err.stack));
       if(err instanceof HTTPExceptions.HTTPError) {
         return HTTPExceptions.forward(res, err);
       }
