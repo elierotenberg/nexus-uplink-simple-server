@@ -78,10 +78,11 @@ var Connection = (function () {
     var path = _ref2.path;
     var diff = _ref2.diff;
     var hash = _ref2.hash;
+    var nextHash = _ref2.nextHash;
     _.dev(function () {
-      return path.should.be.a.String && diff.should.be.an.Object && (hash === null || _.isString(hash)).should.be.ok;
+      return path.should.be.a.String && diff.should.be.an.Object && (hash === null || _.isString(hash)).should.be.ok && (nextHash === null || _.isString(hash)).should.be.ok;
     });
-    this.push("update", { path: path, diff: diff, hash: hash });
+    this.push("update", { path: path, diff: diff, hash: hash, nextHash: nextHash });
   };
 
   Connection.prototype.emit = function (_ref3) {

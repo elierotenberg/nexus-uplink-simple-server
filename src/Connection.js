@@ -67,12 +67,13 @@ class Connection {
     this._socket.removeListener('message', this._handleMessage);
   }
 
-  update({ path, diff, hash }) {
+  update({ path, diff, hash, nextHash }) {
     _.dev(() => path.should.be.a.String &&
       diff.should.be.an.Object &&
-      (hash === null || _.isString(hash)).should.be.ok
+      (hash === null || _.isString(hash)).should.be.ok &&
+      (nextHash === null || _.isString(hash)).should.be.ok
     );
-    this.push('update', { path, diff, hash });
+    this.push('update', { path, diff, hash, nextHash });
   }
 
   emit({ room, params }) {

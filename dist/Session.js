@@ -133,11 +133,12 @@ require("6to5/polyfill");var Promise = (global || window).Promise = require("lod
       var path = _ref3.path;
       var diff = _ref3.diff;
       var hash = _ref3.hash;
+      var nextHash = _ref3.nextHash;
       _.dev(function () {
         return path.should.be.a.String;
       });
       if (this._subscriptions[path] !== void 0) {
-        this.proxy("update")({ path: path, diff: diff, hash: hash });
+        this.proxy("update")({ path: path, diff: diff, hash: hash, nextHash: nextHash });
       }
       return this;
     };

@@ -100,10 +100,10 @@ class UplinkSimpleServer {
       const previousValue = this._storesCache[path];
       this._storesCache[path] = value;
       if(this._subscribers[path] !== void 0) {
-        const [hash, diff] =
-          (previousValue !== void 0 && previousValue !== null && value !== null) ?
-          [_.hash(previousValue), _.diff(previousValue, value)] : [null, {}];
-        return Promise.map(Object.keys(this._subscribers[path]), (k) => this._subscribers[path][k].update({ path, diff, hash }));
+        const nextHash = value === null ? null : _.hash(value);
+        const hash = previousValue === void 0 || previousValue === null ? null : _.hash(previousValue);
+        const diff = nextHash === null || hash === null ? [] : _.diff(previousValue, value);
+        return Promise.map(Object.keys(this._subscribers[path]), (k) => this._subscribers[path][k].update({ path, diff, hash, nextHash }));
       }
     });
   }
