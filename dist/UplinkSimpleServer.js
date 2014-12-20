@@ -1,5 +1,9 @@
 "use strict";
 
+var _toArray = function (arr) {
+  return Array.isArray(arr) ? arr : Array.from(arr);
+};
+
 require("6to5/polyfill");var Promise = (global || window).Promise = require("lodash-next").Promise;var __DEV__ = (process.env.NODE_ENV !== "production");var __PROD__ = !__DEV__;var __BROWSER__ = (typeof window === "object");var __NODE__ = !__BROWSER__;var _ = require("lodash-next");
 var bodyParser = require("body-parser");
 var ConstantRouter = require("nexus-router").ConstantRouter;
@@ -209,8 +213,12 @@ var UplinkSimpleServer = (function () {
       });
       var path = req.path;
       var body = req.body;
-      var params = body;
-      if (_this8._actions.match(path) === null) {
+      var _ref6 = [path, body];
+      var _ref7 = _toArray(_ref6);
+
+      var action = _ref7[0];
+      var params = _ref7[1];
+      if (_this8._actions.match(action) === null) {
         throw new HTTPExceptions.NotFound(req.path);
       }
       if (params === void 0) {
@@ -225,7 +233,7 @@ var UplinkSimpleServer = (function () {
       if (!_this8.isActiveSession(params.guid)) {
         throw new HTTPExceptions.Unauthorized("Invalid guid: " + params.guid);
       }
-      return _this8.dispatch({ path: path, params: params }).then(function (result) {
+      return _this8.dispatch({ action: action, params: params }).then(function (result) {
         _.dev(function () {
           return console.warn("nexus-uplink-simple-server", ">>", "POST", req.path, req.body, result);
         });
@@ -275,8 +283,8 @@ var UplinkSimpleServer = (function () {
       close: function () {
         return _this10._handleDisconnection(socket.id);
       },
-      handshake: function (_ref6) {
-        var guid = _ref6.guid;
+      handshake: function (_ref8) {
+        var guid = _ref8.guid;
         return _this10._handleHandshake(socket.id, { guid: guid });
       } };
     Object.keys(handlers).forEach(function (event) {
@@ -305,9 +313,9 @@ var UplinkSimpleServer = (function () {
     connection.destroy();
   };
 
-  UplinkSimpleServer.prototype._handleHandshake = function (socketId, _ref7) {
+  UplinkSimpleServer.prototype._handleHandshake = function (socketId, _ref9) {
     var _this12 = this;
-    var guid = _ref7.guid;
+    var guid = _ref9.guid;
     _.dev(function () {
       return socketId.should.be.a.String && guid.should.be.a.String && (_this12._connections[socketId] !== void 0).should.be.ok;
     });
@@ -328,20 +336,20 @@ var UplinkSimpleServer = (function () {
           resume: function () {
             return _this12._handleResume(guid);
           },
-          subscribeTo: function (_ref8) {
-            var path = _ref8.path;
+          subscribeTo: function (_ref10) {
+            var path = _ref10.path;
             return _this12._handleSubscribeTo(guid, { path: path });
           },
-          unsubscribeFrom: function (_ref9) {
-            var path = _ref9.path;
+          unsubscribeFrom: function (_ref11) {
+            var path = _ref11.path;
             return _this12._handleUnsubscribeFrom(guid, { path: path });
           },
-          listenTo: function (_ref10) {
-            var room = _ref10.room;
+          listenTo: function (_ref12) {
+            var room = _ref12.room;
             return _this12._handleListenTo(guid, { room: room });
           },
-          unlistenFrom: function (_ref11) {
-            var room = _ref11.room;
+          unlistenFrom: function (_ref13) {
+            var room = _ref13.room;
             return _this12._handleUnlistenFrom(guid, { room: room });
           } };
         _this12._sessions[guid] = { session: session, handlers: handlers };
@@ -385,9 +393,9 @@ var UplinkSimpleServer = (function () {
     this.events.emit("resume", guid);
   };
 
-  UplinkSimpleServer.prototype._handleSubscribeTo = function (guid, _ref12) {
+  UplinkSimpleServer.prototype._handleSubscribeTo = function (guid, _ref14) {
     var _this16 = this;
-    var path = _ref12.path;
+    var path = _ref14.path;
     _.dev(function () {
       return guid.should.be.a.String && path.should.be.a.String && (_this16._sessions[guid] !== void 0).should.be.ok;
     });
@@ -401,9 +409,9 @@ var UplinkSimpleServer = (function () {
     }
   };
 
-  UplinkSimpleServer.prototype._handleUnsubscribeFrom = function (guid, _ref13) {
+  UplinkSimpleServer.prototype._handleUnsubscribeFrom = function (guid, _ref15) {
     var _this17 = this;
-    var path = _ref13.path;
+    var path = _ref15.path;
     _.dev(function () {
       return guid.should.be.a.String && path.should.be.a.String && (_this17._sessions[guid] !== void 0).should.be.ok;
     });
@@ -418,9 +426,9 @@ var UplinkSimpleServer = (function () {
     }
   };
 
-  UplinkSimpleServer.prototype._handleListenTo = function (guid, _ref14) {
+  UplinkSimpleServer.prototype._handleListenTo = function (guid, _ref16) {
     var _this18 = this;
-    var room = _ref14.room;
+    var room = _ref16.room;
     _.dev(function () {
       return guid.should.be.a.String && room.should.be.a.String && (_this18._sessions[guid] !== void 0).should.be.ok;
     });
@@ -434,9 +442,9 @@ var UplinkSimpleServer = (function () {
     }
   };
 
-  UplinkSimpleServer.prototype._handleUnlistenFrom = function (guid, _ref15) {
+  UplinkSimpleServer.prototype._handleUnlistenFrom = function (guid, _ref17) {
     var _this19 = this;
-    var room = _ref15.room;
+    var room = _ref17.room;
     _.dev(function () {
       return guid.should.be.a.String && room.should.be.a.String && (_this19._sessions[guid] !== void 0).should.be.ok;
     });

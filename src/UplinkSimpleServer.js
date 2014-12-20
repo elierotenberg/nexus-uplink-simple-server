@@ -172,8 +172,8 @@ class UplinkSimpleServer {
     Promise.try(() => {
       _.dev(() => console.warn('nexus-uplink-simple-server', '<<', 'POST', req.path, req.body));
       const { path, body } = req;
-      const params = body;
-      if(this._actions.match(path) === null) {
+      const [action, params] = [path, body];
+      if(this._actions.match(action) === null) {
         throw new HTTPExceptions.NotFound(req.path);
       }
       if(params === void 0) {
@@ -188,7 +188,7 @@ class UplinkSimpleServer {
       if(!this.isActiveSession(params.guid)) {
         throw new HTTPExceptions.Unauthorized(`Invalid guid: ${params.guid}`);
       }
-      return this.dispatch({ path, params })
+      return this.dispatch({ action, params })
       .then((result) => {
         _.dev(() => console.warn('nexus-uplink-simple-server', '>>', 'POST', req.path, req.body, result));
         res.status(200).json(result);
