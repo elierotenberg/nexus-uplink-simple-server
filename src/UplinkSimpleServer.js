@@ -167,7 +167,8 @@ class UplinkSimpleServer {
   _handlePOST(req, res) {
     Promise.try(() => {
       _.dev(() => console.warn('nexus-uplink-simple-server', '<<', 'POST', req.path, req.body));
-      const { path, params } = req;
+      const { path, body } = req;
+      const params = body;
       if(this._actions.match(path) === null) {
         throw new HTTPExceptions.NotFound(req.path);
       }

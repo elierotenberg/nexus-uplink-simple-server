@@ -204,7 +204,8 @@ var UplinkSimpleServer = (function () {
         return console.warn("nexus-uplink-simple-server", "<<", "POST", req.path, req.body);
       });
       var path = req.path;
-      var params = req.params;
+      var body = req.body;
+      var params = body;
       if (_this8._actions.match(path) === null) {
         throw new HTTPExceptions.NotFound(req.path);
       }
