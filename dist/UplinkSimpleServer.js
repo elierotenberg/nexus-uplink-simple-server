@@ -156,6 +156,10 @@ var UplinkSimpleServer = (function () {
     });
   };
 
+  UplinkSimpleServer.prototype.isActiveSession = function (guid) {
+    return this._sessions[guid] !== void 0;
+  };
+
   UplinkSimpleServer.prototype._bindIOHandlers = function () {
     var _this6 = this;
     this._io.attach(this._server);

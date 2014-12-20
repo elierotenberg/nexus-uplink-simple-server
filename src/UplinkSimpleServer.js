@@ -133,6 +133,10 @@ class UplinkSimpleServer {
     });
   }
 
+  isActiveSession(guid) {
+    return this._sessions[guid] !== void 0;
+  }
+
   // Private methods
 
   _bindIOHandlers() {
