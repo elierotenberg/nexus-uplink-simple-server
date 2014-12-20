@@ -167,22 +167,23 @@ class UplinkSimpleServer {
   _handlePOST(req, res) {
     Promise.try(() => {
       _.dev(() => console.warn('nexus-uplink-simple-server', '<<', 'POST', req.path, req.body));
-      if(this._actions.match(req.path) === null) {
+      const { path, params } = req;
+      if(this._actions.match(path) === null) {
         throw new HTTPExceptions.NotFound(req.path);
       }
-      if(req.body.params === void 0) {
+      if(params === void 0) {
         throw new HTTPExceptions.BadRequest(`Missing required field: 'params'.`);
       }
-      if(!_.isObject(req.body.params)) {
+      if(!_.isObject(params)) {
         throw new HTTPExceptions.BadRequest(`Field 'params' should be an Object.`);
       }
-      if(req.body.params.guid === void 0) {
+      if(params.guid === void 0) {
         throw new HTTPExceptions.BadRequest(`Missing required field: 'params'.'guid'.`);
       }
-      if(!this.isActiveSession(req.body.params.guid)) {
-        throw new HTTPExceptions.Unauthorized(`Invalid guid: ${req.body.params.guid}`);
+      if(!this.isActiveSession(params.guid)) {
+        throw new HTTPExceptions.Unauthorized(`Invalid guid: ${params.guid}`);
       }
-      return this.dispatch({ path: req.path, params: req.body.params })
+      return this.dispatch({ path, params })
       .then((result) => {
         _.dev(() => console.warn('nexus-uplink-simple-server', '>>', 'POST', req.path, req.body, result));
         res.status(200).json(result);

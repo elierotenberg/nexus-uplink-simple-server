@@ -203,22 +203,24 @@ var UplinkSimpleServer = (function () {
       _.dev(function () {
         return console.warn("nexus-uplink-simple-server", "<<", "POST", req.path, req.body);
       });
-      if (_this8._actions.match(req.path) === null) {
+      var path = req.path;
+      var params = req.params;
+      if (_this8._actions.match(path) === null) {
         throw new HTTPExceptions.NotFound(req.path);
       }
-      if (req.body.params === void 0) {
+      if (params === void 0) {
         throw new HTTPExceptions.BadRequest("Missing required field: 'params'.");
       }
-      if (!_.isObject(req.body.params)) {
+      if (!_.isObject(params)) {
         throw new HTTPExceptions.BadRequest("Field 'params' should be an Object.");
       }
-      if (req.body.params.guid === void 0) {
+      if (params.guid === void 0) {
         throw new HTTPExceptions.BadRequest("Missing required field: 'params'.'guid'.");
       }
-      if (!_this8.isActiveSession(req.body.params.guid)) {
-        throw new HTTPExceptions.Unauthorized("Invalid guid: " + req.body.params.guid);
+      if (!_this8.isActiveSession(params.guid)) {
+        throw new HTTPExceptions.Unauthorized("Invalid guid: " + params.guid);
       }
-      return _this8.dispatch({ path: req.path, params: req.body.params }).then(function (result) {
+      return _this8.dispatch({ path: path, params: params }).then(function (result) {
         _.dev(function () {
           return console.warn("nexus-uplink-simple-server", ">>", "POST", req.path, req.body, result);
         });
