@@ -16,7 +16,7 @@ class AtomiclyFlushable {
   }
 
   get(key) {
-    return this._store[key];
+    return _.clone(this._store[key]);
   }
 
   set(key, value) {

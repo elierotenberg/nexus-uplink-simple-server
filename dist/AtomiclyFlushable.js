@@ -17,7 +17,7 @@ var AtomiclyFlushable = (function () {
   };
 
   AtomiclyFlushable.prototype.get = function (key) {
-    return this._store[key];
+    return _.clone(this._store[key]);
   };
 
   AtomiclyFlushable.prototype.set = function (key, value) {
