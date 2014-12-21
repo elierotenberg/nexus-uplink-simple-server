@@ -12,6 +12,7 @@ var EventEmitter = require("events").EventEmitter;
 var http = require("http");
 var HTTPExceptions = require("http-exceptions");
 
+var AtomiclyFlushable = require("./AtomiclyFlushable");
 var instanceOfEngineIOSocket = require("./instanceOfEngineIOSocket");
 var JSONCache = require("./JSONCache");
 var Connection = require("./Connection");
@@ -491,6 +492,8 @@ _.extend(UplinkSimpleServer.prototype, {
   _sessions: null,
   _subscribers: null,
   _listeners: null });
+
+_.extend(UplinkSimpleServer, { AtomiclyFlushable: AtomiclyFlushable });
 
 
 module.exports = UplinkSimpleServer;
