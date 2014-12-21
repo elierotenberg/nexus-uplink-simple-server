@@ -12,7 +12,7 @@ var EventEmitter = require("events").EventEmitter;
 var http = require("http");
 var HTTPExceptions = require("http-exceptions");
 
-var AtomiclyFlushable = require("./AtomiclyFlushable");
+var DirtyMarker = require("./DirtyMarker");
 var instanceOfEngineIOSocket = require("./instanceOfEngineIOSocket");
 var JSONCache = require("./JSONCache");
 var Connection = require("./Connection");
@@ -493,7 +493,7 @@ _.extend(UplinkSimpleServer.prototype, {
   _subscribers: null,
   _listeners: null });
 
-_.extend(UplinkSimpleServer, { AtomiclyFlushable: AtomiclyFlushable });
+_.extend(UplinkSimpleServer, { DirtyMarker: DirtyMarker });
 
 
 module.exports = UplinkSimpleServer;

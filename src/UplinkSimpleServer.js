@@ -6,7 +6,7 @@ const EventEmitter = require('events').EventEmitter;
 const http = require('http');
 const HTTPExceptions = require('http-exceptions');
 
-const AtomiclyFlushable = require('./AtomiclyFlushable');
+const DirtyMarker = require('./DirtyMarker');
 const instanceOfEngineIOSocket = require('./instanceOfEngineIOSocket');
 const JSONCache = require('./JSONCache');
 const Connection = require('./Connection');
@@ -387,7 +387,7 @@ _.extend(UplinkSimpleServer.prototype, {
   _listeners: null,
 });
 
-_.extend(UplinkSimpleServer, { AtomiclyFlushable });
+_.extend(UplinkSimpleServer, { DirtyMarker });
 
 
 module.exports = UplinkSimpleServer;
