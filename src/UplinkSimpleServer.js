@@ -90,7 +90,7 @@ class UplinkSimpleServer {
       if(this._storesCache[path] === void 0) {
         return null;
       }
-      return this._storesCache[path];
+      return this._storesCache[path].value;
     });
   }
 

@@ -107,7 +107,7 @@ var UplinkSimpleServer = (function () {
       if (_this2._storesCache[path] === void 0) {
         return null;
       }
-      return _this2._storesCache[path];
+      return _this2._storesCache[path].value;
     });
   };
 
