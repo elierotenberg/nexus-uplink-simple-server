@@ -87,7 +87,7 @@ class UplinkSimpleServer {
       _.dev(() => path.should.be.a.String &&
         (this._stores.match(path) !== null).should.be.ok
       );
-      const value = this._storesCache[path];
+      const { value } = this._storesCache[path];
       return value === void 0 ? null : value;
     });
   }
@@ -98,13 +98,14 @@ class UplinkSimpleServer {
         (value === null || _.isObject(value)).should.be.ok &&
         (this._stores.match(path) !== null).should.be.ok
       );
-      const previousValue = this._storesCache[path];
-      this._storesCache[path] = value;
+      const prev = this._storesCache[path] || { value: null, version: 0 };
+      const next = { value, version: prev.version + 1 };
+      this._storesCache[path] = next;
       if(this._subscribers[path] !== void 0) {
-        const nextHash = value === null ? null : _.hash(value);
-        const hash = previousValue === void 0 || previousValue === null ? null : _.hash(previousValue);
-        const diff = nextHash === null || hash === null ? [] : _.diff(previousValue, value);
-        return Promise.map(Object.keys(this._subscribers[path]), (k) => this._subscribers[path][k].update({ path, diff, hash, nextHash }));
+        const diff =  prev.value === null || value === null ? [] : _.diff(prev.value, value);
+        return Promise.map(Object.keys(this._subscribers[path]), (k) =>
+          this._subscribers[path][k].update({ path, diff, prevVersion: prev.version, nextVersion: next.version })
+        );
       }
     });
   }

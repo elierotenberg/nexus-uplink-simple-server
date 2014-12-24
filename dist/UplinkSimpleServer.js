@@ -104,7 +104,7 @@ var UplinkSimpleServer = (function () {
       _.dev(function () {
         return path.should.be.a.String && (_this2._stores.match(path) !== null).should.be.ok;
       });
-      var value = _this2._storesCache[path];
+      var value = _this2._storesCache[path].value;
       return value === void 0 ? null : value;
     });
   };
@@ -117,15 +117,20 @@ var UplinkSimpleServer = (function () {
       _.dev(function () {
         return path.should.be.a.String && (value === null || _.isObject(value)).should.be.ok && (_this3._stores.match(path) !== null).should.be.ok;
       });
-      var previousValue = _this3._storesCache[path];
-      _this3._storesCache[path] = value;
+      var prev = _this3._storesCache[path] || { value: null, version: 0 };
+      var next = { value: value, version: prev.version + 1 };
+      _this3._storesCache[path] = next;
       if (_this3._subscribers[path] !== void 0) {
-        var nextHash = value === null ? null : _.hash(value);
-        var hash = previousValue === void 0 || previousValue === null ? null : _.hash(previousValue);
-        var diff = nextHash === null || hash === null ? [] : _.diff(previousValue, value);
-        return Promise.map(Object.keys(_this3._subscribers[path]), function (k) {
-          return _this3._subscribers[path][k].update({ path: path, diff: diff, hash: hash, nextHash: nextHash });
-        });
+        var _ret = (function () {
+          var diff = prev.value === null || value === null ? [] : _.diff(prev.value, value);
+          return {
+            v: Promise.map(Object.keys(_this3._subscribers[path]), function (k) {
+              return _this3._subscribers[path][k].update({ path: path, diff: diff, prevVersion: prev.version, nextVersion: next.version });
+            })
+          };
+        })();
+
+        if (typeof _ret === "object") return _ret.v;
       }
     });
   };
