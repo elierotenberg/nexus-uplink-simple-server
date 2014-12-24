@@ -132,13 +132,13 @@ require("6to5/polyfill");var Promise = (global || window).Promise = require("lod
     Session.prototype.update = function (_ref3) {
       var path = _ref3.path;
       var diff = _ref3.diff;
-      var hash = _ref3.hash;
-      var nextHash = _ref3.nextHash;
+      var prevVersion = _ref3.prevVersion;
+      var nextVersion = _ref3.nextVersion;
       _.dev(function () {
-        return path.should.be.a.String;
+        return path.should.be.a.String && diff.should.be.an.Object && prevVersion.should.be.a.Number && nextVersion.should.be.a.Number;
       });
       if (this._subscriptions[path] !== void 0) {
-        this.proxy("update")({ path: path, diff: diff, hash: hash, nextHash: nextHash });
+        this.proxy("update")({ path: path, diff: diff, prevVersion: prevVersion, nextVersion: nextVersion });
       }
       return this;
     };

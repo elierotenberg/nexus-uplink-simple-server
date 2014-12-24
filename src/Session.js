@@ -96,10 +96,14 @@ module.exports = function({ Connection }) {
       return this;
     }
 
-    update({ path, diff, hash, nextHash }) {
-      _.dev(() => path.should.be.a.String);
+    update({ path, diff, prevVersion, nextVersion }) {
+      _.dev(() => path.should.be.a.String &&
+        diff.should.be.an.Object &&
+        prevVersion.should.be.a.Number &&
+        nextVersion.should.be.a.Number
+      );
       if(this._subscriptions[path] !== void 0) {
-        this.proxy('update')({ path, diff, hash, nextHash });
+        this.proxy('update')({ path, diff, prevVersion, nextVersion });
       }
       return this;
     }

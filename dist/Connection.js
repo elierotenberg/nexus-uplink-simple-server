@@ -77,12 +77,12 @@ var Connection = (function () {
   Connection.prototype.update = function (_ref2) {
     var path = _ref2.path;
     var diff = _ref2.diff;
-    var hash = _ref2.hash;
-    var nextHash = _ref2.nextHash;
+    var prevVersion = _ref2.prevVersion;
+    var nextVersion = _ref2.nextVersion;
     _.dev(function () {
-      return path.should.be.a.String && diff.should.be.an.Object && (hash === null || _.isString(hash)).should.be.ok && (nextHash === null || _.isString(hash)).should.be.ok;
+      return path.should.be.a.String && diff.should.be.an.Object && prevVersion.should.be.a.Number && nextVersion.should.be.a.Number;
     });
-    this.push("update", { path: path, diff: diff, hash: hash, nextHash: nextHash });
+    this.push("update", { path: path, diff: diff, prevVersion: prevVersion, nextVersion: nextVersion });
   };
 
   Connection.prototype.emit = function (_ref3) {
