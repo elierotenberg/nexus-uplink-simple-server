@@ -87,8 +87,10 @@ class UplinkSimpleServer {
       _.dev(() => path.should.be.a.String &&
         (this._stores.match(path) !== null).should.be.ok
       );
-      const { value } = this._storesCache[path];
-      return value === void 0 ? null : value;
+      if(this._storesCache[path] === void 0) {
+        return null;
+      }
+      return this._storesCache[path];
     });
   }
 

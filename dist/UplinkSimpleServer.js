@@ -104,8 +104,10 @@ var UplinkSimpleServer = (function () {
       _.dev(function () {
         return path.should.be.a.String && (_this2._stores.match(path) !== null).should.be.ok;
       });
-      var value = _this2._storesCache[path].value;
-      return value === void 0 ? null : value;
+      if (_this2._storesCache[path] === void 0) {
+        return null;
+      }
+      return _this2._storesCache[path];
     });
   };
 
