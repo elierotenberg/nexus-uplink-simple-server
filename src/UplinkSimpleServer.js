@@ -5,10 +5,10 @@ const EngineIO = require('engine.io');
 const EventEmitter = require('events').EventEmitter;
 const http = require('http');
 const HTTPExceptions = require('http-exceptions');
+const Remutable = require('Remutable');
 
-const DirtyMarker = require('./DirtyMarker');
+const Message = require('./Message');
 const instanceOfEngineIOSocket = require('./instanceOfEngineIOSocket');
-const JSONCache = require('./JSONCache');
 const Connection = require('./Connection');
 const Session = require('./Session')({ Connection });
 
@@ -56,7 +56,6 @@ class UplinkSimpleServer {
       _rooms: createConstantRouter(rooms),
       _actions: createConstantRouter(actions),
       _storesCache: {},
-      _jsonCache: new JSONCache({ maxSize: jsonCacheMaxSize }),
       _handshakeTimeout: handshakeTimeout,
       _activityTimeout: activityTimeout,
       _app: app,
@@ -82,59 +81,83 @@ class UplinkSimpleServer {
     return this;
   }
 
+  init(path) {
+    _.dev(() => path.should.be.a.string &&
+      (this._stores.match(path) !== null).should.be.ok &&
+      (this._storesCache[path] === void 0).should.be.ok
+    );
+    const r = this._storesCache[path] = new Remutable();
+    return r;
+  }
+
+  select(path) {
+    _.dev(() => path.should.be.a.String &&
+      (this._stores.match(path) !== null).should.be.ok
+    );
+    return this._storesCache[path];
+  }
+
+  commit(path) {
+    _.dev(() => path.should.be.a.String &&
+      (this._stores.match(path) !== null).should.be.ok &&
+      (this._storesCache[path] !== void 0).should.be.ok
+    );
+    if(!this._storesCache[path].dirty) {
+      return;
+    }
+    return { path, patch: this._storesCache[path].commit() };
+  }
+
+  update({ path, patch }) {
+    _.dev(() => path.should.be.a.String &&
+      patch.should.be.an.instanceOf(Remutable.Patch)
+    );
+    if(this._subscribers[path] === void 0) {
+      return 0;
+    }
+    const subscribersCount = Object.keys(this._subscribers[path]).length;
+    const message = new Message(Message.TYPES.UPDATE, { path, patch: patch.serialize() });
+    Object.keys(this._subscribers[path])
+    .forEach((k) => this._subscribers[path][k].queue(message));
+    return subscribersCount;
+  }
+
   pull({ path }) {
     return Promise.try(() => {
       _.dev(() => path.should.be.a.String &&
         (this._stores.match(path) !== null).should.be.ok
       );
       if(this._storesCache[path] === void 0) {
-        return null;
+        return void 0;
       }
-      return this._storesCache[path].value;
-    });
-  }
-
-  update({ path, value }) {
-    return Promise.try(() => {
-      _.dev(() => path.should.be.a.String &&
-        (value === null || _.isObject(value)).should.be.ok &&
-        (this._stores.match(path) !== null).should.be.ok
-      );
-      const prev = this._storesCache[path] || { value: null, version: 0 };
-      const next = { value, version: prev.version + 1 };
-      this._storesCache[path] = next;
-      if(this._subscribers[path] !== void 0) {
-        const diff =  prev.value === null || value === null ? [] : _.diff(prev.value, value);
-        return Promise.map(Object.keys(this._subscribers[path]), (k) =>
-          this._subscribers[path][k].update({ path, diff, prevVersion: prev.version, nextVersion: next.version })
-        );
-      }
+      return this._storesCache[path].serialize();
     });
   }
 
   emit({ room, params }) {
-    return Promise.try(() => {
-      _.dev(() => room.should.be.a.String &&
-        (params === null || _.isObject(params)).should.be.ok &&
-        (this._rooms.match(room) !== null).should.be.ok
-      );
-      if(this._listeners[room] !== void 0) {
-        return Promise.map(Object.keys(this._listeners[room]), (k) => this._listeners[room][k].emit({ room, params }));
-      }
-    });
+    _.dev(() => room.should.be.a.String &&
+      (params === null || _.isObject(params)).should.be.ok &&
+      (this._rooms.match(room) !== null).should.be.ok
+    );
+    if(this._listeners[room] === void 0) {
+      return 0;
+    }
+    const listenersCount = Object.keys(this._listeners[room]).length;
+    const message = new Message(Message.TYPES.EMIT, { room, params });
+    Object.keys(this._listeners[room])
+    .forEach((k) => this._listeners[room][k].queue(message));
+    return listenersCount;
   }
 
   dispatch({ action, params }) {
-    return Promise.try(() => {
-      params = params === void 0 ? {} : params;
-      _.dev(() => action.should.be.a.String &&
-        (params === null || _.isObject(params)).should.be.ok &&
-        (this._actions.match(action) !== null).should.be.ok
-      );
-      const handlers = this.actions.listeners(action).length;
-      this.actions.emit(action, params);
-      return { handlers };
-    });
+    params = params === void 0 ? {} : params;
+    _.dev(() => action.should.be.a.String &&
+      (params === null || _.isObject(params)).should.be.ok &&
+      (this._actions.match(action) !== null).should.be.ok
+    );
+    const handlersCount = this.actions.listeners(action).length;
+    this.actions.emit(action, params);
+    return handlersCount;
   }
 
   isActiveSession(guid) {
@@ -359,11 +382,6 @@ class UplinkSimpleServer {
       }
     }
   }
-
-  _stringify(object) {
-    _.dev(() => object.should.be.an.Object);
-    return this._jsonCache.stringify(object);
-  }
 }
 
 _.extend(UplinkSimpleServer.prototype, {
@@ -376,7 +394,6 @@ _.extend(UplinkSimpleServer.prototype, {
   _rooms: null,
   _actions: null,
   _storesCache: null,
-  _jsonCache: null,
   _handshakeTimeout: null,
   _activityTimeout: null,
 
@@ -390,7 +407,7 @@ _.extend(UplinkSimpleServer.prototype, {
   _listeners: null,
 });
 
-_.extend(UplinkSimpleServer, { DirtyMarker });
+_.extend(UplinkSimpleServer, { Message });
 
 
 module.exports = UplinkSimpleServer;

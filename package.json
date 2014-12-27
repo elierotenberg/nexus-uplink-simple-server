@@ -35,6 +35,7 @@
     "lodash-next": "^1.12.0",
     "lru-cache": "^2.5.0",
     "nexus-router": "^0.3.13",
+    "remutable": "^0.6.0",
     "request": "^2.51.0",
     "sigmund": "^1.0.0"
   }
