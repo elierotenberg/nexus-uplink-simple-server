@@ -5,14 +5,12 @@ const EngineIO = require('engine.io');
 const EventEmitter = require('events').EventEmitter;
 const http = require('http');
 const HTTPExceptions = require('http-exceptions');
-const Remutable = require('Remutable');
+const { PROTOCOL_VERSION, MESSAGE_TYPES, Message, Remutable } = require('nexus-uplink-common');
 
-const Message = require('./Message');
 const instanceOfEngineIOSocket = require('./instanceOfEngineIOSocket');
 const Connection = require('./Connection');
 const Session = require('./Session')({ Connection });
 
-const DEFAULT_JSON_CACHE_MAX_SIZE = 10000;
 const DEFAULT_HANDSHAKE_TIMEOUT = 5000;
 const DEFAULT_ACTIVITY_TIMEOUT = 10000;
 
@@ -31,8 +29,7 @@ class UplinkSimpleServer {
   // stores, rooms, and actions are three whitelists of
   // string patterns. Each is an array that will be passed
   // to the Router constructor.
-  constructor({ pid, stores, rooms, actions, app, jsonCacheMaxSize, handshakeTimeout, activityTimeout }) {
-    jsonCacheMaxSize = jsonCacheMaxSize === void 0 ? DEFAULT_JSON_CACHE_MAX_SIZE : jsonCacheMaxSize;
+  constructor({ pid, stores, rooms, actions, app, handshakeTimeout, activityTimeout }) {
     handshakeTimeout = handshakeTimeout === void 0 ? DEFAULT_HANDSHAKE_TIMEOUT : handshakeTimeout;
     activityTimeout = activityTimeout === void 0 ? DEFAULT_ACTIVITY_TIMEOUT : activityTimeout;
     _.dev(() => (pid !== void 0).should.be.ok &&
@@ -43,7 +40,6 @@ class UplinkSimpleServer {
       app.get.should.be.a.Function &&
       app.post.should.be.a.Function &&
       // Other typechecks
-      jsonCacheMaxSize.should.be.a.Number.and.not.be.below(0) &&
       handshakeTimeout.should.be.a.Number.and.not.be.below(0) &&
       activityTimeout.should.be.a.Number.and.not.be.below(0)
     );
@@ -122,18 +118,6 @@ class UplinkSimpleServer {
     return subscribersCount;
   }
 
-  pull({ path }) {
-    return Promise.try(() => {
-      _.dev(() => path.should.be.a.String &&
-        (this._stores.match(path) !== null).should.be.ok
-      );
-      if(this._storesCache[path] === void 0) {
-        return void 0;
-      }
-      return this._storesCache[path].serialize();
-    });
-  }
-
   emit({ room, params }) {
     _.dev(() => room.should.be.a.String &&
       (params === null || _.isObject(params)).should.be.ok &&
@@ -174,15 +158,13 @@ class UplinkSimpleServer {
   _handleGET(req, res) {
     Promise.try(() => {
       _.dev(() => console.warn('nexus-uplink-simple-server', '<<', 'GET', req.path));
-      if(this._stores.match(req.path) === null) {
+      if(this._stores.match(req.path) === null || this.select(path) === void 0) {
         throw new HTTPExceptions.NotFound(req.path);
       }
-      return this.pull({ path: req.path })
-      .then((value) => {
-        _.dev(() => (value === null || _.isObject(value)).should.be.ok);
-        _.dev(() => console.warn('nexus-uplink-simple-server', '>>', 'GET', req.path, value));
-        res.status(200).type('application/json').send(value);
-      });
+      const json = this.select(path).serialize();
+      _.dev(() => json.should.be.a.String);
+      res.status(200).type('application/json').send(json);
+      _.dev(() => console.warn('nexus-uplink-simple-server', '>>', 'GET', req.path, json));
     })
     .catch((err) => {
       _.dev(() => console.warn('nexus-uplink-simple-server', '>>', 'GET', req.path, err.toString(), err.stack));

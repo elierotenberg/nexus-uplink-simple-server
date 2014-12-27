@@ -17,9 +17,9 @@
   },
   "homepage": "https://github.com/elierotenberg/nexus-uplink-simple-server",
   "devDependencies": {
-    "del": "^1.1.0",
+    "del": "^1.1.1",
     "gulp": "^3.8.10",
-    "gulp-6to5": "^1.0.2",
+    "gulp-6to5": "^2.0.0",
     "gulp-insert": "^0.4.0",
     "gulp-jshint": "^1.9.0",
     "gulp-plumber": "^0.6.6",
@@ -28,14 +28,14 @@
     "jshint-stylish": "^1.0.0"
   },
   "dependencies": {
-    "6to5": "^1.15.0",
+    "6to5": "^2.0.2",
     "body-parser": "^1.10.0",
     "engine.io": "^1.4.3",
-    "http-exceptions": "^0.4.11",
-    "lodash-next": "^1.12.0",
+    "http-exceptions": "^0.5.0",
+    "lodash-next": "^2.0.0",
     "lru-cache": "^2.5.0",
-    "nexus-router": "^0.3.13",
-    "remutable": "^0.6.0",
+    "nexus-router": "^0.4.0",
+    "nexus-uplink-common": "^0.3.0",
     "request": "^2.51.0",
     "sigmund": "^1.0.0"
   }
