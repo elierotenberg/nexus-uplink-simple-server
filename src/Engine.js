@@ -1,14 +1,21 @@
 const _ = require('lodash-next');
-const bodyParser = require('body-parser');
-const EngineIO = require('engine.io');
-const http = require('http');
 const HTTPExceptions = require('http-exceptions');
-const { PROTOCOL_VERSION, MESSAGE_TYPES, Message, Remutable } = require('nexus-uplink-common');
+const { MESSAGE_TYPES, Message, Remutable } = require('nexus-uplink-common');
 
 const DEFAULT_HANDSHAKE_TIMEOUT = 5000;
 const DEFAULT_SESSION_TIMEOUT = 5000;
 
-class Server {
+const RESERVED_ACTIONS = {
+  SESSION_CREATE: '/session/create',
+  SESSION_TIMEOUT: '/session/timeout',
+  SESSION_DESTROY: '/session/destroy',
+};
+
+const INT_MAX = 9007199254740992;
+const ALLOW_RESERVED_ACTION = _.random(1, INT_MAX - 1);
+const ENGINE_SECRET = `EngineSecret${_.random(1, INT_MAX - 1)}`;
+
+class Engine {
   constructor(options) {
     options = options || {};
     _.dev(() => options.should.be.an.Object);
@@ -91,6 +98,7 @@ class Server {
     if(this._sessions[clientSecret] === void 0) {
       this._sessions[clientSecret] = {
         clientSecret,
+        // invariant: _.size(connections) > 0 XOR (sessionTimeout === null && queue === null)
         connections: {},
         sessionTimeout: null,
         queue: null,
@@ -101,11 +109,21 @@ class Server {
     return this._sessions[clientSecret];
   }
 
-  dispatch(action, clientSecret, params) {
+  dispatch(clientSecret, action, params, _allowReservedAction = false) {
+    if(_.contains(RESERVED_ACTIONS, action)) {
+      _allowReservedAction.should.be.exactly(ALLOW_RESERVED_ACTION);
+      clientSecret.should.be.exactly(ENGINE_SECRET);
+    }
     if(!this._actionHandlers[action]) {
       return 0;
     }
-    _.each(this._actionHandlers[action], (fn) => fn(this.session(clientSecret), params));
+    if(clientSecret !== ENGINE_SECRET) {
+      // Ensure session exists
+      this.session(clientSecret);
+      // Reset the timer in case the session was about to expire
+      this.resetTimeout(clientSecret);
+    }
+    _.each(this._actionHandlers[action], (fn) => fn(clientSecret, params));
     return this._actionHandlers[action].length;
   }
 
@@ -135,10 +153,10 @@ class Server {
     Promise.try(() => {
       const { path, body } = req;
       const { clientSecret, params } = body;
-      if(this._actionHandlers[action] === void 0) {
+      if(this._actionHandlers[path] === void 0) {
         throw new HTTPExceptions.NotFound(path);
       }
-      return this.dispatch(path, clientSecret, params);
+      return this.dispatch(clientSecret, path, params);
     })
     .then((n) => {
       _.dev(() => console.log(`nexus-uplink-server << POST ${req.path} >> ${n}`));
@@ -156,8 +174,9 @@ class Server {
 
   handleConnection(socket) {
     const socketId = socket.id;
-    const connection = this._connections[socketId] = {
+    this._connections[socketId] = {
       socket,
+      // invariant: handshakeTimeout === null XOR clientSecret === null
       handshakeTimeout: setTimeout(() => this.handleHandshakeTimeout(socketId), this._handshakeTimeout),
       clientSecret: null,
     };
@@ -167,7 +186,7 @@ class Server {
   }
 
   handleDisconnection(socketId) {
-    _.dev(() =>
+    _.dev(() => {
       socketId.should.be.a.String;
       (this._connections[socketId] !== void 0);
     });
@@ -193,6 +212,8 @@ class Server {
   }
 
   handleMessage(socketId, json) {
+    // Wrap in a Promise.try to avoid polluting the main execution stack
+    // and catch any async error correctly
     Promise.try(() => {
       const message = Message.fromJSON(json);
       const interpretation = message.interpret();
@@ -213,35 +234,66 @@ class Server {
       }
     })
     .catch((err) => {
-      this.socketSend(socketId, Message.Error({ err }));
+      this.send(socketId, Message.Error({ err }));
     });
   }
 
   handleHandshake(socketId, { clientSecret }) {
+    (this._connections[socketId].clientSecret === null).should.be.ok;
+    _.dev(() => (this._connections[socketId].handshakeTimeout !== null).should.be.ok);
+    clearTimeout(this._connections[socketId].handshakeTimeout);
+    this._connections[socketId].handshakeTimeout = null;
+    this._connections[socketId].clientSecret = clientSecret;
+    const session = this.session(clientSecret);
+    session.connections[socketId] = socketId;
+    if(_.size(session.connections) === 1) {
+      this._resume(clientSecret);
+    }
   }
 
   handleSubscribe(socketId, { path }) {
-
+    (this._connections[socketId].clientSecret !== null).should.be.ok;
+    (this._stores[path] !== void 0).should.be.ok;
+    const { clientSecret } = this._connections[socketId];
+    if(this._subscribers[path] === void 0) {
+      this._subscribers[path] = {};
+    }
+    this._subscribers[path][clientSecret] = clientSecret;
   }
 
   handleUnsubscribe(socketId, { path }) {
-
+    (this._connections[socketId].clientSecret !== null).should.be.ok;
+    (this._stores[path] !== void 0).should.be.ok;
+    const { clientSecret } = this._connections[socketId];
+    if(this._subscribers[path] === void 0) {
+      return;
+    }
+    if(this._subscribers[path][clientSecret] !== void 0) {
+      delete this._subscribers[path][clientSecret];
+    }
+    if(_.size(this._subscribers[path]) === 0) {
+      delete this._subscribers[path];
+    }
   }
 
   handleDispatch(socketId, { action, params }) {
-
+    (this._connections[socketId].clientSecret !== null).should.be.ok;
+    const { clientSecret } = this._connections[socketId];
+    this.dispatch(clientSecret, action, params);
   }
 
   handleSessionCreate(clientSecret) {
-
+    this.dispatch(ENGINE_SECRET, 'create', { clientSecret }, ALLOW_RESERVED_ACTION);
   }
 
   handleSessionTimeout(clientSecret) {
-
+    this.dispatch(ENGINE_SECRET, 'timeout', { clientSecret }, ALLOW_RESERVED_ACTION);
+    const err = new Error(`Session Timeout`);
+    this.kill(clientSecret, { message: err.message, stack: __DEV__ ? err.stack : null });
   }
 
   handleSessionDestroy(clientSecret) {
-
+    this.dispatch(ENGINE_SECRET, 'destroy', { clientSecret }, ALLOW_RESERVED_ACTION);
   }
 
   send(socketId, message) {
@@ -268,6 +320,45 @@ class Server {
     }
   }
 
+  kill(clientSecret, err) {
+    _.dev(() => {
+      clientSecret.should.be.a.String;
+      err.should.be.an.Object;
+    });
+    if(!this._sessions[clientSecret]) {
+      return;
+    }
+    // Send an error message to all connected clients
+    if(_.size(this._sessions[clientSecret].connections) > 0) {
+      const message = Message.Error({ err });
+      _.each(this._sessions[clientSecret].connections, (socketId) => this.send(socketId, message));
+      this._sessions[clientSecret].connections = null;
+    }
+    // Remove the session timeout
+    if(this._sessions[clientSecret].sessionTimeout !== null) {
+      clearTimeout(this._sessions[clientSecret].sessionTimeout);
+      this._sessions[clientSecret].sessionTimeout = null;
+    }
+    // Dereference the message queue, for clarity
+    if(this._sessions[clientSecret].queue !== null) {
+      this._sessions[clientSecret].queue = null;
+    }
+    // Dereference the clientSecret, for clarity
+    this._sessions[clientSecret].clientSecret = null;
+    delete this._sessions[clientSecret];
+    this.handleSessionDestroy(clientSecret);
+  }
+
+  // If the session is about to expire, reset its expiration timer.
+  resetTimeout(clientSecret) {
+    _.dev(() => (this._sessions[clientSecret] !== void 0).should.be.ok);
+    if(this._sessions[clientSecret].sessionTimeout !== null) {
+      clearTimeout(this._sessions[clientSecret].sessionTimeout);
+      this._sessions[clientSecret]
+      .sessionTimeout = setTimeout(() => this.handleSessionTimeout(clientSecret), this._sessionTimeout);
+    }
+  }
+
   _pause(clientSecret) {
     _.dev(() => {
       clientSecret.should.be.a.String;
@@ -286,7 +377,7 @@ class Server {
       clientSecret.should.be.a.String;
       (this._sessions[clientSecret] !== void 0).should.be.ok;
       (this._sessions[clientSecret].sessionTimeout !== null).should.be.ok;
-      this._sessions[clientSecret].queue.should.be.an.Array;
+      (this._sessions[clientSecret].queue !== null).should.be.ok;
       _.size(this._sessions[clientSecret].connections).should.be.above(0);
     });
     clearTimeout(this._sessions[clientSecret].sessionTimeout);
@@ -297,4 +388,6 @@ class Server {
   }
 }
 
-module.exports = { Server };
+_.extend(Engine, { ENGINE_SECRET });
+
+module.exports = { Engine };
