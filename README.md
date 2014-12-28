@@ -1,67 +1,95 @@
 Nexus Uplink Server (Simple)
 ============================
 
-Nexus Uplink is an dead-simple, lightweight protocol on top of which Flux over the Wire can be implemented.
+Nexus Uplink is an dead-simple, lightweight protocol on top of which [Flux over the Wire](codepen.io/write/flux-over-the-wire-part-1) can be implemented.
 
-[On the client side](https://github.com/elierotenberg/nexus-uplink-client), a Nexus Uplink Client can react to stores updates, and dispatch actions.
-[On the server side](https://github.com/elierotenberg/nexus-uplink-simple-server), a Nexus Uplink Server can react to actions dispatchs, and update stores.
+This package contains the implementation of the __server side__ component of Nexus Uplink.
+For the __client side__ component, see [nexus-uplink-client](https://github.com/elierotenberg/nexus-uplink-client).
 
-Briefly:
-- actions are transported via POST requests (url pathname is the action identifier, JSON-encoded body is the payload)
-- updates are transported via Websocket (or Engine.IO fallback) (as diff objects)
+Nexus Uplink combines very well with [React](http://facebook.github.io/react/) views on the client, and particularly with [React Nexus](https://github.com/elierotenberg/react-nexus), but it is not tied to either of these projects.
 
-This package is a simple (but efficient) implementation of the Nexus Uplink server-side protocol.
-Also see the [isomorphic client implementation](https://github.com/elierotenberg/nexus-uplink-client) of the Nexus Uplink client-side protocol.
 
-Example
-=======
+## Core principles
 
-On the server:
+Nexus Uplink is a simple communication protocol to allow:
+- Clients to fetch values, and receive updates, from a server-side store
+- Clients to send actions, to a server-side dispatcher
+- Server to respond to actions, and mutate the store
 
-```js
-var server = new UplinkSimpleServer({
-  pid: _.guid('pid'),
-  // stores, rooms and actions are url patterns whitelists
-  stores: ['/ping'],
-  rooms: [],
-  actions: ['/ping'],
-  // pass an express or express-like app
-  app: express().use(cors())
-});
-
-var pingCounter = 0;
-
-// setup action handlers
-server.actions.on('/ping', function(payload) {
-  // guid is a cryptosecure unique user id, automatically maintained
-  var guid = payload.guid;
-  var remoteDate = payload.localDate;
-  var localDate = Date.now();
-  console.log('client ' + guid + ' pinged.');
-  console.log('latency is ' + (localDate - remoteDate) + '.');
-  pingCounter++;
-  server.update({ path: '/ping', value: { counter: pingCounter }});
-});
+Implementation roughly is:
+- Store values are exposed via HTTP GET: clients can simply fire an HTTP GET request to retrieve them.
+- Actions are send via HTTP POST: clients can simply fire an HTTP POST request to send them.
+- Updates are dispatched via Websockets (or socket.io fallback)
 
 ```
-
-On the client:
-
-```js
-var client = new Uplink({ url: 'http://localhost' });
-
-// subscribe to remote updates
-client.subscribeTo('/ping', function(ping) {
-  console.log('ping updated', ping.counter);
-});
-
-// fire-and-forget dispatch actions
-setInterval(function() {
-  client.dispatch('/ping', { localDate: Date.now() });
-}, 1000);
++--- stringify action ---> HTTP POST request --- parse action ---+
+^                                                                |
+|                                                                v
+Nexus Uplink Client                            Nexus Uplink Server
+^                                                                |
+|                                                                v
++--- parse update --- Websocket message <--- stringify update ---+
 ```
 
-Installation
-============
 
-`npm install nexus-uplink-simple-server --save`
+## Performance first
+
+Nexus Uplink is designed and implemented with strong performance concerns in minds.
+It is built from the ground up to support:
+- Tens of thousands of concurrent users (more with the upcoming redis-based server implementation)
+- Thousands of updates per second
+- Thousands of actions per second
+
+This bleeding edge performance is achieved using:
+- [Immutable](https://github.com/facebook/immutable-js) internals, wrapped in [Remutable](https://github.com/elierotenberg/remutable) for ultra efficient patch broadcasting
+- Easy caching without cache invalidation pain (handled by the protocol), just put the server behind Varnish/nginx/whatever caching proxy and you're good to go
+- Optimized lazy memoization of message and patches JSON-encoding
+- One-way data flow
+- Action fast-path using the client-server Websocket channel when available
+- Easy and configurable transaction-based updates batching
+
+
+## About this package
+
+This is a prototype, yet fully-functional implementation of the server side component of Nexus Uplink.
+It is single-process, but extremely straightforward, and provides a very simple setup to deploy moderately large applications (think thousands of concurrents users and not millions, which is already quite a lot).
+To scale further, we need to leverage multiple processes (ideally multiple machines), which involves dealing with [IPC](http://en.wikipedia.org/wiki/Inter-process_communication). IPC is hard, but thanks to the one-way data flow of the Nexus Uplink protocol, it is relatively straightforward using an efficient message queue such as [redis](http://redis.io/) or [RabbitMQ](http://www.rabbitmq.com/).
+
+
+## Example (server-side)
+
+```js
+const { Engine, Server } = require('nexus-uplink-server');
+const engine = new Engine();
+const server = new Server(engine);
+const todoList = engine.get('/todoList');
+// send batch updates every 100ms
+setInterval(() => todoList.dirty || todoList.commit(), 100);
+engine.addActionHandler('/add-todo-item', (clientSecret, { name, description }) => {
+  todoList.set(name, {
+    description,
+    addedBy: md5(clientSecret), // hash clientSecret
+  });
+});
+engine.addActionHandler('/complete-todo-item', (clientSecret, { name }) => {
+  if(todoList.has(name) && todoList.get(name).addedBy === md5(clientSecret)) {
+    todoList.delete(name);
+  }
+});
+server.listen(8888);
+```
+
+## Example (client-side)
+
+```js
+const { Engine, Client } = require('nexus-uplink-client');
+const Engine = new Engine();
+const client = new Client(engine);
+const todoList = client.subscribe('/todoList');
+todoList.afterUpdate(() => {
+  console.log('todoList has been updated to', todoList);
+});
+client.dispatch('/add-todo-item', {
+  name: 'My first item', description: 'This is my first item!'
+});
+```

@@ -15,6 +15,50 @@ const INT_MAX = 9007199254740992;
 const ALLOW_RESERVED_ACTION = _.random(1, INT_MAX - 1);
 const ENGINE_SECRET = `EngineSecret${_.random(1, INT_MAX - 1)}`;
 
+// Alias for class Engine, to shut-up jshint
+let _Engine;
+
+class BoundRemutable {
+  constructor(path, remutable, engine) {
+    _.dev(() => {
+      path.should.be.a.String;
+      remutable.should.be.an.instanceOf(Remutable);
+      engine.should.be.an.instanceOf(_Engine);
+    });
+    _.extend(this, {
+      _path: path,
+      _remutable: remutable,
+      _engine: engine,
+    });
+  }
+
+  get() {
+    return this._remutable.working.set.apply(this._remutable.working, arguments);
+  }
+
+  set() {
+    return this._remutable.set.apply(this._remutable, arguments);
+  }
+
+  delete() {
+    return this._remutable.delete.apply(this._remutable, arguments);
+  }
+
+  rollback() {
+    return this._remutable.rollback.apply(this._remutable, arguments);
+  }
+
+  commit() {
+    return this._engine.commit(this._path);
+  }
+}
+
+_.extend(BoundRemutable.prototype, {
+  _path: null,
+  _remutable: null,
+  _engine: null,
+});
+
 class Engine {
   constructor(options) {
     options = options || {};
@@ -62,14 +106,7 @@ class Engine {
     if(this._stores[path] === void 0) {
       this._stores[path] = new Remutable();
     }
-    const remutable = this._stores[path];
-    return {
-      get: _.scope(remutable.working.get, remutable.working),
-      set: _.scope(remutable.set, remutable),
-      delete: _.scope(remutable.delete, remutable),
-      rollback: _.scope(remutable.rollback, remutable),
-      commit: () => this.commit(path),
-    };
+    return new BoundRemutable(path, this._stores[path], this);
   }
 
   delete(path) {
@@ -387,6 +424,8 @@ class Engine {
     this._sessionTimeout[clientSecret].queue = null;
   }
 }
+
+_Engine = Engine;
 
 _.extend(Engine, { ENGINE_SECRET });
 
