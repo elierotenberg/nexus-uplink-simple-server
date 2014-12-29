@@ -1,5 +1,10 @@
 "use strict";
 
+var _prototypeProperties = function (child, staticProps, instanceProps) {
+  if (staticProps) Object.defineProperties(child, staticProps);
+  if (instanceProps) Object.defineProperties(child.prototype, instanceProps);
+};
+
 require("6to5/polyfill");var Promise = (global || window).Promise = require("lodash-next").Promise;var __DEV__ = process.env.NODE_ENV !== "production";var __PROD__ = !__DEV__;var __BROWSER__ = typeof window === "object";var __NODE__ = !__BROWSER__;var _ = require("lodash-next");
 var HTTPExceptions = require("http-exceptions");
 var _ref = require("nexus-uplink-common");
@@ -35,10 +40,6 @@ var BoundRemutable = function BoundRemutable(path, remutable, engine) {
     _engine: engine });
 };
 
-BoundRemutable.prototype.get = function () {
-  return this._remutable.working.set.apply(this._remutable.working, arguments);
-};
-
 BoundRemutable.prototype.set = function () {
   return this._remutable.set.apply(this._remutable, arguments);
 };
@@ -54,6 +55,21 @@ BoundRemutable.prototype.rollback = function () {
 BoundRemutable.prototype.commit = function () {
   return this._engine.commit(this._path);
 };
+
+_prototypeProperties(BoundRemutable, null, {
+  working: {
+    get: function () {
+      return this._remutable.working;
+    },
+    enumerable: true
+  },
+  head: {
+    get: function () {
+      return this._remutable.head;
+    },
+    enumerable: true
+  }
+});
 
 _.extend(BoundRemutable.prototype, {
   _path: null,

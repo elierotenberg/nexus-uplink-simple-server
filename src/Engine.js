@@ -32,8 +32,12 @@ class BoundRemutable {
     });
   }
 
-  get() {
-    return this._remutable.working.set.apply(this._remutable.working, arguments);
+  get working() {
+    return this._remutable.working;
+  }
+
+  get head() {
+    return this._remutable.head;
   }
 
   set() {

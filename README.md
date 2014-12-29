@@ -62,32 +62,38 @@ To scale further, we need to leverage multiple processes (ideally multiple machi
 const { Engine, Server } = require('nexus-uplink-server');
 const engine = new Engine();
 const server = new Server(engine);
+// get (and implicitly instantiate) stores references
+// it is similar to a Remutable (map) instance, and is initially empty
 const todoList = engine.get('/todoList');
 const counters = engine.get('/counters');
 // send batch updates every 100ms
 // you can commit on every mutation if you feel like so,
 // but batch updates are really the proper way to scale
 setInterval(() => {
+  // only commit if the object is not dirty
   todoList.dirty || todoList.commit();
   counters.dirty || counters.commit();
 }, 100);
 engine.addActionHandler('/add-todo-item', (clientID, { name, description }) => {
+  // schedule an update for the next commit
   todoList.set(name, {
     description,
     addedBy: clientID,
   });
 });
 engine.addActionHandler('/complete-todo-item', (clientID, { name }) => {
-  if(todoList.has(name) && todoList.get(name).addedBy === sha256(clientID)) {
+  // todoList.working points to the current version, including non-commited changes
+  if(todoList.working.has(name) && todoList.working.get(name).addedBy === clientID) {
+    // schedule a deletion for the next commit
     todoList.delete(name);
   }
 });
 // /session/create and /session/destroy are special, reserved actions
-engine.addActionHandler('/sessions/create', (clientID) => {
+engine.addActionHandler('/session/create', (clientID) => {
   counters.set('active', counters.get('active') + 1);
   counters.set('total', counters.get('total') + 1);
 });
-engine.addActionHandler('/sessions/destroy', (clientID) => {
+engine.addActionHandler('/session/destroy', (clientID) => {
   counters.set('active', counters.get('active') - 1);
 });
 server.listen(8888);
@@ -101,12 +107,19 @@ const { Engine, Client } = require('nexus-uplink-client');
 // it is typically generated at server-side rendering time
 const Engine = new Engine(clientSecret);
 const client = new Client(engine);
+// subscribe to several stores
+// the returned object is an Immutable.Map, initially empty
 const todoList = client.subscribe('/todoList');
 const counters = client.subscribe('/counters');
-todoList.afterUpdate(() => {
+// execute callback everytime a patch is received
+todoList.onUpdate((patch) => {
+  // 'patch' is a Remutable.Patch instance.
+  // In most cases though you will just dismiss it
+  // and read from the updated object directly.
+  console.log('patch received:', patch);
   console.log('todoList has been updated to', todoList);
 });
-counters.afterUpdate(() => {
+counters.onUpdate(() => {
   console.log('active users:', counters.get('active'));
   console.log('total users:', counters.get('total'));
 });
