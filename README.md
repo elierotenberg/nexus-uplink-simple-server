@@ -98,7 +98,7 @@ engine.addActionHandler('/session/create', (clientID) => {
 engine.addActionHandler('/session/destroy', (clientID) => {
   counters.set('active', counters.working.get('active') - 1);
 });
-server.listen(8888);
+server.start(8888);
 ```
 
 ### Example (client-side)
@@ -110,7 +110,7 @@ const { Engine, Client } = require('nexus-uplink-client');
 // clientSecret must be a globally unique, cryptographic secret
 // it is typically generated at server-side rendering time
 const Engine = new Engine(clientSecret);
-const client = new Client(engine);
+const client = new Client(engine).start('http://localhost:8888');
 // subscribe to several stores
 // the returned object is like a Remutable instance, initially empty
 const todoList = client.subscribe('/todoList');
@@ -141,6 +141,7 @@ client.fetch('/counters')
 .then((counters) => console.log('counters received', counters))
 .catch((reason) => console.warn('fetching failed because', reason));
 ```
+
 ### Isomorphic client
 
 The protocol is designed so that the client can be (and is) fully isomorphic. It means you can just `require` the client in either Node or the browser and it 'just works'. This is especially useful if you need to implement server-side rendering, as you now have a fully isomorphic data fetching stack.

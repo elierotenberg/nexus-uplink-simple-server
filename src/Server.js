@@ -1,6 +1,6 @@
 const _ = require('lodash-next');
 const bodyParser = require('body-parser');
-const EngineIO = require('engine.io');
+const EngineIOServer = require('engine.io');
 const http = require('http');
 const express = require('express');
 
@@ -16,11 +16,15 @@ class Server {
     this._app = options.app || express().use(bodyParser.json());
     // I don't really see a use case for these too but let's make it
     // configurable too
-    this._io = options.io || EngineIO.Server();
+    this._io = options.io || EngineIOServer.Server();
     this._http = options.http || http.Server(this._app);
     this._bindIOHandlers();
     this._bindHTTPHandlers();
-    this.listen = Promise.promisify(this._http.listen.bind(this._http));
+    this._listen = Promise.promisify(this._http.listen.bind(this._http));
+  }
+
+  start() {
+    return this._listen.apply(this, arguments);
   }
 
   _bindIOHandlers() {
@@ -36,5 +40,5 @@ class Server {
 
 _.extend(Server.prototype, {
   _engine: null,
-  listen: null,
+  _listen: null,
 });
