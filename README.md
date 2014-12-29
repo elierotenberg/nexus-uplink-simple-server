@@ -69,7 +69,7 @@ const counters = engine.get('/counters');
 // stores updates and sent patches to relevant
 // subscribers.
 // engine.comitAll returns a function so you don't have to bind it.
-setInterval(engine.comitAll(), 100);
+setInterval(engine.commitAll(), 100);
 // Alternatively we can write:
 engine.commitEveryMS(100);
 engine.addActionHandler('/add-todo-item', (clientID, { name, description }) => {
