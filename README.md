@@ -103,20 +103,22 @@ const { Engine, Client } = require('nexus-uplink-client');
 const Engine = new Engine(clientSecret);
 const client = new Client(engine);
 // subscribe to several stores
-// the returned object is an Immutable.Map, initially empty
+// the returned object is like a Remutable instance, initially empty
 const todoList = client.subscribe('/todoList');
 const counters = client.subscribe('/counters');
 // execute callback everytime a patch is received
-todoList.onUpdate((patch) => {
+todoList.onChange((head, patch) => {
+  // 'head' is an Immutable.Map containing the updated values.
   // 'patch' is a Remutable.Patch instance.
   // In most cases though you will just dismiss it
-  // and read from the updated object directly.
+  // and read from the updated object directly, but it can be useful
+  // to react directly to update or to implement an undo/redo stack.
   console.log('patch received:', patch);
-  console.log('todoList has been updated to', todoList.head);
+  console.log('todoList has been updated to', head);
 });
-counters.onUpdate(() => {
-  console.log('active users:', counters.get('active'));
-  console.log('total users:', counters.get('total'));
+counters.onChange((head) => { // here we just ignore the patch argument
+  console.log('active users:', head.get('active'));
+  console.log('total users:', head.get('total'));
 });
 client.dispatch('/add-todo-item', {
   name: 'My first item', description: 'This is my first item!'
@@ -126,7 +128,9 @@ counters.unsubscribe();
 // You can also use Nexus Uplink manually.
 // fetch returns a Promise for an Immutable.Map.
 client.fetch('/counters')
-.then((counters) => console.log('counters received', counters));
+// counters is an Immutable.Map
+.then((counters) => console.log('counters received', counters))
+.catch((reason) => console.warn('fetching failed because', reason));
 ```
 ### Isomorphic client
 
