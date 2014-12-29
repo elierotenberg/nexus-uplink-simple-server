@@ -94,7 +94,7 @@ server.listen(8888);
 
 ### Example (client-side)
 
-The recommanded setup is to install the client from `npm` and then use `browserify` or `webpack` to ship it.
+The recommended setup is to install the client from `npm` and then use `browserify` or `webpack` to ship it.
 
 ```js
 const { Engine, Client } = require('nexus-uplink-client');
@@ -147,4 +147,4 @@ Should you need to deploy a larger application, this implementation will still b
 
 ### Do I have to use ES6?
 
-No you don't, although its really easy and you should try it. `package.json` points to the `dist` folder, which is already transpiled to ES6 using `6to5`.
+No you don't, although its really easy and you should try it. `package.json` points to the `dist` folder, which is already transpiled to ES5 using `6to5`.
