@@ -308,18 +308,23 @@ Engine.prototype.handleDisconnection = function (socketId) {
   });
   var clientSecret = this._connections[socketId].clientSecret;
   var handshakeTimeout = this._connections[socketId].handshakeTimeout;
+  // If the connection has done handshake, it is attached to a session,
+  // we must detach it.
   if (clientSecret !== null) {
-    _.dev(function () {
-      return (handshakeTimeout === null).should.be.ok;
-    });
-    _.dev(function () {
-      return (_this9._sessions[clientSecret] !== void 0).should.be.ok;
-    });
-    delete this._sessions[clientSecret].connections[socketId];
-    if (_.size(this._sessions[clientSecret].connections) === 0) {
-      this._pause(clientSecret);
+    // If the session is still active then remove this connection
+    if (this._sessions[clientSecret] !== void 0) {
+      _.dev(function () {
+        return (handshakeTimeout === null).should.be.ok;
+      });
+      delete this._sessions[clientSecret].connections[socketId];
+      // If this was the last active connection, pause the session
+      if (_.size(this._sessions[clientSecret].connections) === 0) {
+        this._pause(clientSecret);
+      }
     }
-  } else {
+  }
+  // If the session has not done handshake, prevent the handshake timeout
+  else {
     _.dev(function () {
       return (handshakeTimeout !== null).should.be.ok;
     });

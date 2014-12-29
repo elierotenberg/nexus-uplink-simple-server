@@ -240,14 +240,20 @@ class Engine {
       (this._connections[socketId] !== void 0);
     });
     const { clientSecret, handshakeTimeout } = this._connections[socketId];
+    // If the connection has done handshake, it is attached to a session,
+    // we must detach it.
     if(clientSecret !== null) {
-      _.dev(() => (handshakeTimeout === null).should.be.ok);
-      _.dev(() => (this._sessions[clientSecret] !== void 0).should.be.ok);
-      delete this._sessions[clientSecret].connections[socketId];
-      if(_.size(this._sessions[clientSecret].connections) === 0) {
-        this._pause(clientSecret);
+      // If the session is still active then remove this connection
+      if(this._sessions[clientSecret] !== void 0) {
+        _.dev(() => (handshakeTimeout === null).should.be.ok);
+        delete this._sessions[clientSecret].connections[socketId];
+        // If this was the last active connection, pause the session
+        if(_.size(this._sessions[clientSecret].connections) === 0) {
+          this._pause(clientSecret);
+        }
       }
     }
+    // If the session has not done handshake, prevent the handshake timeout
     else {
       _.dev(() => (handshakeTimeout !== null).should.be.ok);
       clearTimeout(handshakeTimeout);
