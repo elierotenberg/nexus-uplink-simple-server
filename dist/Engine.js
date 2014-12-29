@@ -476,12 +476,13 @@ Engine.prototype.kill = function (clientSecret, err) {
   if (!this._sessions[clientSecret]) {
     return;
   }
-  // Send an error message to all connected clients
+  // Send an error message to all connected clients and close them
   if (_.size(this._sessions[clientSecret].connections) > 0) {
     (function () {
       var message = Message.Error({ err: err });
       _.each(_this15._sessions[clientSecret].connections, function (socketId) {
-        return _this15.send(socketId, message);
+        _this15.send(socketId, message);
+        _this15.close(socketId);
       });
       _this15._sessions[clientSecret].connections = null;
     })();

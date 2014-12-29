@@ -393,10 +393,13 @@ class Engine {
     if(!this._sessions[clientSecret]) {
       return;
     }
-    // Send an error message to all connected clients
+    // Send an error message to all connected clients and close them
     if(_.size(this._sessions[clientSecret].connections) > 0) {
       const message = Message.Error({ err });
-      _.each(this._sessions[clientSecret].connections, (socketId) => this.send(socketId, message));
+      _.each(this._sessions[clientSecret].connections, (socketId) => {
+        this.send(socketId, message);
+        this.close(socketId);
+      });
       this._sessions[clientSecret].connections = null;
     }
     // Remove the session timeout
