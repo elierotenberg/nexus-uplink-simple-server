@@ -332,17 +332,17 @@ class Engine {
   }
 
   handleSessionCreate(clientSecret) {
-    this.dispatch(clientSecret, 'create', {}, ALLOW_RESERVED_ACTION);
+    this.dispatch(clientSecret, RESERVED_ACTIONS.SESSION_CREATE, {}, ALLOW_RESERVED_ACTION);
   }
 
   handleSessionTimeout(clientSecret) {
-    this.dispatch(clientSecret, 'timeout', {}, ALLOW_RESERVED_ACTION);
+    this.dispatch(clientSecret, RESERVED_ACTIONS.SESSION_TIMEOUT, {}, ALLOW_RESERVED_ACTION);
     const err = new Error(`Session timeout`);
     this.kill(clientSecret, { message: err.message, stack: __DEV__ ? err.stack : null });
   }
 
   handleSessionDestroy(clientSecret) {
-    this.dispatch(clientSecret, 'destroy', {}, ALLOW_RESERVED_ACTION);
+    this.dispatch(clientSecret, RESERVED_ACTIONS.SESSION_DESTROY, {}, ALLOW_RESERVED_ACTION);
   }
 
   handleHandshakeTimeout(socketId) {

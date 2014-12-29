@@ -411,17 +411,17 @@ Engine.prototype.handleDispatch = function (socketId, _ref6) {
 };
 
 Engine.prototype.handleSessionCreate = function (clientSecret) {
-  this.dispatch(clientSecret, "create", {}, ALLOW_RESERVED_ACTION);
+  this.dispatch(clientSecret, RESERVED_ACTIONS.SESSION_CREATE, {}, ALLOW_RESERVED_ACTION);
 };
 
 Engine.prototype.handleSessionTimeout = function (clientSecret) {
-  this.dispatch(clientSecret, "timeout", {}, ALLOW_RESERVED_ACTION);
+  this.dispatch(clientSecret, RESERVED_ACTIONS.SESSION_TIMEOUT, {}, ALLOW_RESERVED_ACTION);
   var err = new Error("Session timeout");
   this.kill(clientSecret, { message: err.message, stack: __DEV__ ? err.stack : null });
 };
 
 Engine.prototype.handleSessionDestroy = function (clientSecret) {
-  this.dispatch(clientSecret, "destroy", {}, ALLOW_RESERVED_ACTION);
+  this.dispatch(clientSecret, RESERVED_ACTIONS.SESSION_DESTROY, {}, ALLOW_RESERVED_ACTION);
 };
 
 Engine.prototype.handleHandshakeTimeout = function (socketId) {
