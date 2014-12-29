@@ -134,6 +134,10 @@ class Engine {
     }
   }
 
+  comitAll() {
+    Object.keys(this._stores).forEach((path) => this.commit(path));
+  }
+
   session(clientSecret) {
     _.dev(() => clientSecret.should.be.a.String);
     if(this._sessions[clientSecret] === void 0) {

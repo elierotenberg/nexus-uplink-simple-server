@@ -172,6 +172,13 @@ Engine.prototype.commit = function (path) {
   }
 };
 
+Engine.prototype.comitAll = function () {
+  var _this5 = this;
+  Object.keys(this._stores).forEach(function (path) {
+    return _this5.commit(path);
+  });
+};
+
 Engine.prototype.session = function (clientSecret) {
   _.dev(function () {
     return clientSecret.should.be.a.String;
@@ -210,13 +217,13 @@ Engine.prototype.dispatch = function (clientSecret, action, params, _allowReserv
 };
 
 Engine.prototype.handleGET = function (req, res) {
-  var _this5 = this;
+  var _this6 = this;
   Promise["try"](function () {
     var path = req.path;
-    if (_this5._stores[path] === void 0) {
+    if (_this6._stores[path] === void 0) {
       throw new HTTPExceptions.NotFound(path);
     }
-    return _this5._stores[path].toJSON();
+    return _this6._stores[path].toJSON();
   }).then(function (json) {
     _.dev(function () {
       return console.log("nexus-uplink-server << GET " + req.path + " >> " + json);
@@ -235,17 +242,17 @@ Engine.prototype.handleGET = function (req, res) {
 };
 
 Engine.prototype.handlePOST = function (req, res) {
-  var _this6 = this;
+  var _this7 = this;
   // req should have its body parsed, eg. using bodyParser.json()
   Promise["try"](function () {
     var path = req.path;
     var body = req.body;
     var clientSecret = body.clientSecret;
     var params = body.params;
-    if (_this6._actionHandlers[path] === void 0) {
+    if (_this7._actionHandlers[path] === void 0) {
       throw new HTTPExceptions.NotFound(path);
     }
-    return _this6.dispatch(clientSecret, path, params);
+    return _this7.dispatch(clientSecret, path, params);
   }).then(function (n) {
     _.dev(function () {
       return console.log("nexus-uplink-server << POST " + req.path + " >> " + n);
@@ -264,31 +271,31 @@ Engine.prototype.handlePOST = function (req, res) {
 };
 
 Engine.prototype.handleConnection = function (socket) {
-  var _this7 = this;
+  var _this8 = this;
   var socketId = socket.id;
   this._connections[socketId] = {
     socket: socket,
     // invariant: handshakeTimeout === null XOR clientSecret === null
     handshakeTimeout: setTimeout(function () {
-      return _this7.handleHandshakeTimeout(socketId);
+      return _this8.handleHandshakeTimeout(socketId);
     }, this._handshakeTimeout),
     clientSecret: null };
   socket.on("close", function () {
-    return _this7.handleDisconnection(socketId);
+    return _this8.handleDisconnection(socketId);
   });
   socket.on("error", function (err) {
-    return _this7.handleError(socketId, err);
+    return _this8.handleError(socketId, err);
   });
   socket.on("message", function (json) {
-    return _this7.handleMessage(socketId, json);
+    return _this8.handleMessage(socketId, json);
   });
 };
 
 Engine.prototype.handleDisconnection = function (socketId) {
-  var _this8 = this;
+  var _this9 = this;
   _.dev(function () {
     socketId.should.be.a.String;
-    _this8._connections[socketId] !== void 0;
+    _this9._connections[socketId] !== void 0;
   });
   var clientSecret = this._connections[socketId].clientSecret;
   var handshakeTimeout = this._connections[socketId].handshakeTimeout;
@@ -297,7 +304,7 @@ Engine.prototype.handleDisconnection = function (socketId) {
       return (handshakeTimeout === null).should.be.ok;
     });
     _.dev(function () {
-      return (_this8._sessions[clientSecret] !== void 0).should.be.ok;
+      return (_this9._sessions[clientSecret] !== void 0).should.be.ok;
     });
     delete this._sessions[clientSecret].connections[socketId];
     if (_.size(this._sessions[clientSecret].connections) === 0) {
@@ -320,34 +327,34 @@ Engine.prototype.handleError = function (socketId, err) {
 };
 
 Engine.prototype.handleMessage = function (socketId, json) {
-  var _this9 = this;
+  var _this10 = this;
   // Wrap in a Promise.try to avoid polluting the main execution stack
   // and catch any async error correctly
   Promise["try"](function () {
     var message = Message.fromJSON(json);
     var interpretation = message.interpret();
     if (message.type === MESSAGE_TYPES.HANDSHAKE) {
-      return _this9.handleHandshake(socketId, interpretation);
+      return _this10.handleHandshake(socketId, interpretation);
     } else if (message.type === MESSAGE_TYPES.SUBSCRIBE) {
-      return _this9.handleSubscribe(socketId, interpretation);
+      return _this10.handleSubscribe(socketId, interpretation);
     } else if (message.type === MESSAGE_TYPES.UNSUBSCRIBE) {
-      return _this9.handleUnsubscribe(socketId, interpretation);
+      return _this10.handleUnsubscribe(socketId, interpretation);
     } else if (message.type === MESSAGE_TYPES.DISPATCH) {
-      return _this9.handleDispatch(socketId, interpretation);
+      return _this10.handleDispatch(socketId, interpretation);
     } else {
       throw new Error("Unknown message type: " + message.type);
     }
   })["catch"](function (err) {
-    _this9.send(socketId, Message.Error({ err: err }));
+    _this10.send(socketId, Message.Error({ err: err }));
   });
 };
 
 Engine.prototype.handleHandshake = function (socketId, _ref3) {
-  var _this10 = this;
+  var _this11 = this;
   var clientSecret = _ref3.clientSecret;
   (this._connections[socketId].clientSecret === null).should.be.ok;
   _.dev(function () {
-    return (_this10._connections[socketId].handshakeTimeout !== null).should.be.ok;
+    return (_this11._connections[socketId].handshakeTimeout !== null).should.be.ok;
   });
   clearTimeout(this._connections[socketId].handshakeTimeout);
   this._connections[socketId].handshakeTimeout = null;
@@ -416,35 +423,35 @@ Engine.prototype.handleHandshakeTimeout = function (socketId) {
 };
 
 Engine.prototype.close = function (socketId) {
-  var _this11 = this;
+  var _this12 = this;
   _.dev(function () {
     socketId.should.be.a.String;
-    (_this11._connections[socketId] !== void 0).should.be.ok;
+    (_this12._connections[socketId] !== void 0).should.be.ok;
   });
   // Resource freeing is done in handleDisconnection()
   this._connections[socketId].socket.close();
 };
 
 Engine.prototype.send = function (socketId, message) {
-  var _this12 = this;
+  var _this13 = this;
   _.dev(function () {
     socketId.should.be.a.String;
-    (_this12._connections[socketId] !== void 0).should.be.ok;
+    (_this13._connections[socketId] !== void 0).should.be.ok;
     message.should.be.an.instanceOf(Message);
   });
   this._connections[socketId].socket.send(message.toJSON());
 };
 
 Engine.prototype.queue = function (clientSecret, message) {
-  var _this13 = this;
+  var _this14 = this;
   _.dev(function () {
     clientSecret.should.be.a.String;
-    (_this13._sessions[clientSecret] !== void 0).should.be.ok;
+    (_this14._sessions[clientSecret] !== void 0).should.be.ok;
     message.should.be.an.instanceOf(Message);
   });
   if (this._sessions[clientSecret].queue === null) {
     Object.keys(this._sessions[clientSecret].connections).forEach(function (socketId) {
-      return _this13.send(socketId, message);
+      return _this14.send(socketId, message);
     });
   } else {
     this._sessions[clientSecret].queue.push(message);
@@ -452,7 +459,7 @@ Engine.prototype.queue = function (clientSecret, message) {
 };
 
 Engine.prototype.kill = function (clientSecret, err) {
-  var _this14 = this;
+  var _this15 = this;
   _.dev(function () {
     clientSecret.should.be.a.String;
     err.should.be.an.Object;
@@ -464,10 +471,10 @@ Engine.prototype.kill = function (clientSecret, err) {
   if (_.size(this._sessions[clientSecret].connections) > 0) {
     (function () {
       var message = Message.Error({ err: err });
-      _.each(_this14._sessions[clientSecret].connections, function (socketId) {
-        return _this14.send(socketId, message);
+      _.each(_this15._sessions[clientSecret].connections, function (socketId) {
+        return _this15.send(socketId, message);
       });
-      _this14._sessions[clientSecret].connections = null;
+      _this15._sessions[clientSecret].connections = null;
     })();
   }
   // Remove the session timeout
@@ -487,14 +494,14 @@ Engine.prototype.kill = function (clientSecret, err) {
 
 // If the session is about to expire, reset its expiration timer.
 Engine.prototype.resetTimeout = function (clientSecret) {
-  var _this15 = this;
+  var _this16 = this;
   _.dev(function () {
-    return (_this15._sessions[clientSecret] !== void 0).should.be.ok;
+    return (_this16._sessions[clientSecret] !== void 0).should.be.ok;
   });
   if (this._sessions[clientSecret].sessionTimeout !== null) {
     clearTimeout(this._sessions[clientSecret].sessionTimeout);
     this._sessions[clientSecret].sessionTimeout = setTimeout(function () {
-      return _this15.handleSessionTimeout(clientSecret);
+      return _this16.handleSessionTimeout(clientSecret);
     }, this._sessionTimeout);
   }
 };
@@ -507,28 +514,28 @@ Engine.clientID = function (clientSecret) {
 };
 
 Engine.prototype._pause = function (clientSecret) {
-  var _this16 = this;
+  var _this17 = this;
   _.dev(function () {
     clientSecret.should.be.a.String;
-    (_this16._sessions[clientSecret] !== void 0).should.be.ok;
-    (_this16._sessions[clientSecret].sessionTimeout === null).should.be.ok;
-    (_this16._sessions[clientSecret].queue === null).should.be.ok;
-    _.size(_this16._sessions[clientSecret].connections).should.be.exactly(0);
+    (_this17._sessions[clientSecret] !== void 0).should.be.ok;
+    (_this17._sessions[clientSecret].sessionTimeout === null).should.be.ok;
+    (_this17._sessions[clientSecret].queue === null).should.be.ok;
+    _.size(_this17._sessions[clientSecret].connections).should.be.exactly(0);
   });
   this._sessions[clientSecret].sessionTimeout = setTimeout(function () {
-    return _this16.handleSessionTimeout(clientSecret);
+    return _this17.handleSessionTimeout(clientSecret);
   }, this._sessionTimeout);
   this._sessions[clientSecret].queue = [];
 };
 
 Engine.prototype._resume = function (clientSecret) {
-  var _this17 = this;
+  var _this18 = this;
   _.dev(function () {
     clientSecret.should.be.a.String;
-    (_this17._sessions[clientSecret] !== void 0).should.be.ok;
-    (_this17._sessions[clientSecret].sessionTimeout !== null).should.be.ok;
-    (_this17._sessions[clientSecret].queue !== null).should.be.ok;
-    _.size(_this17._sessions[clientSecret].connections).should.be.above(0);
+    (_this18._sessions[clientSecret] !== void 0).should.be.ok;
+    (_this18._sessions[clientSecret].sessionTimeout !== null).should.be.ok;
+    (_this18._sessions[clientSecret].queue !== null).should.be.ok;
+    _.size(_this18._sessions[clientSecret].connections).should.be.above(0);
   });
   clearTimeout(this._sessions[clientSecret].sessionTimeout);
   while (this._sessions[clientSecret].queue.length > 0) {

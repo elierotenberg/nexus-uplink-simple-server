@@ -28,7 +28,7 @@
     "jshint-stylish": "^1.0.0"
   },
   "dependencies": {
-    "6to5": "^2.1.0",
+    "6to5": "^2.2.0",
     "body-parser": "^1.10.0",
     "engine.io": "^1.4.3",
     "http-exceptions": "^0.5.0",

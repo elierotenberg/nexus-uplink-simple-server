@@ -9,7 +9,7 @@ For the __client side__ component, see [nexus-uplink-client](https://github.com/
 Nexus Uplink combines very well with [React](http://facebook.github.io/react/) views on the client, and particularly with [React Nexus](https://github.com/elierotenberg/react-nexus), but it is not tied to either of these projects.
 
 
-## Core principles
+### Core principles
 
 Nexus Uplink is a simple communication protocol to allow:
 - Clients to fetch values, and receive updates, from a server-side store
@@ -32,7 +32,7 @@ Nexus Uplink Client                                             Nexus Uplink Ser
 ```
 
 
-## Performance first
+### Performance first
 
 Nexus Uplink is designed and implemented with strong performance concerns in minds.
 It is built from the ground up to support:
@@ -49,14 +49,7 @@ This bleeding edge performance is achieved using:
 - Easy and configurable transaction-based updates batching
 
 
-## About this package
-
-This is a prototype, yet fully-functional implementation of the server side component of Nexus Uplink.
-It is single-process, but extremely straightforward, and provides a very simple setup to deploy moderately large applications (think thousands of concurrents users and not millions, which is already quite a lot).
-To scale further, we need to leverage multiple processes (ideally multiple machines), which involves dealing with [IPC](http://en.wikipedia.org/wiki/Inter-process_communication). IPC is hard, but thanks to the one-way data flow of the Nexus Uplink protocol, it is relatively straightforward using an efficient message queue such as [redis](http://redis.io/) or [RabbitMQ](http://www.rabbitmq.com/).
-
-
-## Example (server-side)
+### Example (server-side)
 
 ```js
 const { Engine, Server } = require('nexus-uplink-server');
@@ -66,14 +59,10 @@ const server = new Server(engine);
 // it is similar to a Remutable (map) instance, and is initially empty
 const todoList = engine.get('/todoList');
 const counters = engine.get('/counters');
-// send batch updates every 100ms
-// you can commit on every mutation if you feel like so,
-// but batch updates are really the proper way to scale
-setInterval(() => {
-  // only commit if the object is not dirty
-  todoList.dirty || todoList.commit();
-  counters.dirty || counters.commit();
-}, 100);
+// Every 100ms, do a batch update: commit all
+// stores updates and sent patches to relevant
+// subscribers.
+setInterval(() => engine.comitAll(), 100);
 engine.addActionHandler('/add-todo-item', (clientID, { name, description }) => {
   // schedule an update for the next commit
   todoList.set(name, {
@@ -83,10 +72,14 @@ engine.addActionHandler('/add-todo-item', (clientID, { name, description }) => {
 });
 engine.addActionHandler('/complete-todo-item', (clientID, { name }) => {
   // todoList.working points to the current version, including non-commited changes
-  if(todoList.working.has(name) && todoList.working.get(name).addedBy === clientID) {
+  if(todoList.working.has(name) &&
+    todoList.working.get(name).addedBy === clientID) {
     // schedule a deletion for the next commit
     todoList.delete(name);
   }
+  // We can commit immediatly and individually, though we should do this
+  // carefully to avoid spamming clients
+  todoList.commit();
 });
 // /session/create and /session/destroy are special, reserved actions
 engine.addActionHandler('/session/create', (clientID) => {
@@ -99,7 +92,9 @@ engine.addActionHandler('/session/destroy', (clientID) => {
 server.listen(8888);
 ```
 
-## Example (client-side)
+### Example (client-side)
+
+The recommanded setup is to install the client from `npm` and then use `browserify` or `webpack` to ship it.
 
 ```js
 const { Engine, Client } = require('nexus-uplink-client');
@@ -117,7 +112,7 @@ todoList.onUpdate((patch) => {
   // In most cases though you will just dismiss it
   // and read from the updated object directly.
   console.log('patch received:', patch);
-  console.log('todoList has been updated to', todoList);
+  console.log('todoList has been updated to', todoList.head);
 });
 counters.onUpdate(() => {
   console.log('active users:', counters.get('active'));
@@ -127,4 +122,29 @@ client.dispatch('/add-todo-item', {
   name: 'My first item', description: 'This is my first item!'
 });
 counters.unsubscribe();
+// You don't have to subscribe to automatic updates.
+// You can also use Nexus Uplink manually.
+// fetch returns a Promise for an Immutable.Map.
+client.fetch('/counters')
+.then((counters) => console.log('counters received', counters));
 ```
+### Isomorphic client
+
+The protocol is designed so that the client can be (and is) fully isomorphic. It means you can just `require` the client in either Node or the browser and it 'just works'. This is especially useful if you need to implement server-side rendering, as you now have a fully isomorphic data fetching stack.
+
+
+
+### Is this implementation suitable for real-world apps?
+
+This is a prototype, yet fully-functional implementation of the server side component of Nexus Uplink.
+
+It is single-process, but extremely straightforward, and provides a very simple setup to deploy moderately large applications (think thousands of concurrents users and not millions, which is already quite a lot).
+You can just run it and it will work. Add Varnish or another cache infront of it and it will do fine up to thousands of concurrent users, which is already quite alot!
+
+To scale further up to hundreds of thousands of users, we need to leverage multiple processes (ideally multiple machines), which involves dealing with [IPC](http://en.wikipedia.org/wiki/Inter-process_communication). IPC is hard, but thanks to the one-way data flow of the Nexus Uplink protocol, it is relatively straightforward using an efficient message queue such as [redis](http://redis.io/) or [RabbitMQ](http://www.rabbitmq.com/).
+
+Should you need to deploy a larger application, this implementation will still be a reasonably easy to deploy test server, as from the clients' perspective, it is indistinguishable from a more complex implementation.
+
+### Do I have to use ES6?
+
+No you don't, although its really easy and you should try it. `package.json` points to the `dist` folder, which is already transpiled to ES6 using `6to5`.
