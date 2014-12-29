@@ -142,7 +142,8 @@ The protocol is designed so that the client can be (and is) fully isomorphic. It
 
 This is a prototype, yet fully-functional implementation of the server side component of Nexus Uplink.
 
-It is single-process, but extremely straightforward, and provides a very simple setup to deploy moderately large applications (think thousands of concurrents users and not millions, which is already quite a lot).
+It is single-process, but extremely straightforward, and provides a very simple setup to deploy moderately large applications.
+
 You can just run it and it will work. Add Varnish or another cache infront of it and it will do fine up to thousands of concurrent users, which is already quite alot!
 
 To scale further up to hundreds of thousands of users, we need to leverage multiple processes (ideally multiple machines), which involves dealing with [IPC](http://en.wikipedia.org/wiki/Inter-process_communication). IPC is hard, but thanks to the one-way data flow of the Nexus Uplink protocol, it is relatively straightforward using an efficient message queue such as [redis](http://redis.io/) or [RabbitMQ](http://www.rabbitmq.com/).
