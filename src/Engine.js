@@ -134,7 +134,7 @@ class Engine {
     }
   }
 
-  comitAll() {
+  commitAll() {
     return () => Object.keys(this._stores).forEach((path) => this.commit(path));
   }
 

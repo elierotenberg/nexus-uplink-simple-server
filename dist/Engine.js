@@ -172,7 +172,7 @@ Engine.prototype.commit = function (path) {
   }
 };
 
-Engine.prototype.comitAll = function () {
+Engine.prototype.commitAll = function () {
   var _this5 = this;
   return function () {
     return Object.keys(_this5._stores).forEach(function (path) {
