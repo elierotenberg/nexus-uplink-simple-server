@@ -90,11 +90,11 @@ engine.addActionHandler('/complete-todo-item', (clientID, { name }) => {
 });
 // /session/create and /session/destroy are special, reserved actions
 engine.addActionHandler('/session/create', (clientID) => {
-  counters.set('active', counters.get('active') + 1);
-  counters.set('total', counters.get('total') + 1);
+  counters.set('active', counters.working.get('active') + 1);
+  counters.set('total', counters.working.get('total') + 1);
 });
 engine.addActionHandler('/session/destroy', (clientID) => {
-  counters.set('active', counters.get('active') - 1);
+  counters.set('active', counters.working.get('active') - 1);
 });
 server.listen(8888);
 ```
