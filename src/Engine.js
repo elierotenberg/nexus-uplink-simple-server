@@ -135,7 +135,12 @@ class Engine {
   }
 
   comitAll() {
-    Object.keys(this._stores).forEach((path) => this.commit(path));
+    return () => Object.keys(this._stores).forEach((path) => this.commit(path));
+  }
+
+  commitEvery(period) {
+    _.dev(() => period.should.be.a.Number);
+    return setInterval(this.comitAll(), period);
   }
 
   session(clientSecret) {
