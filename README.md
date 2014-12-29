@@ -22,13 +22,13 @@ Implementation roughly is:
 - Updates are dispatched via Websockets (or socket.io fallback)
 
 ```
-+--- stringify action ---> HTTP POST request --- parse action ---+
-^                                                                |
-|                                                                v
-Nexus Uplink Client                            Nexus Uplink Server
-^                                                                |
-|                                                                v
-+--- parse update --- Websocket message <--- stringify update ---+
+        +--- stringify action ---> HTTP POST request --- parse action ---+
+        ^                                                                |
+        |                                                                v
+Nexus Uplink Client                                             Nexus Uplink Server
+        ^                                                                |
+        |                                                                v
+        +--- parse update --- Websocket message <--- stringify update ---+
 ```
 
 
