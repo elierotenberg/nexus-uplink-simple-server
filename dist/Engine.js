@@ -174,9 +174,18 @@ Engine.prototype.commit = function (path) {
 
 Engine.prototype.comitAll = function () {
   var _this5 = this;
-  Object.keys(this._stores).forEach(function (path) {
-    return _this5.commit(path);
+  return function () {
+    return Object.keys(_this5._stores).forEach(function (path) {
+      return _this5.commit(path);
+    });
+  };
+};
+
+Engine.prototype.commitEvery = function (period) {
+  _.dev(function () {
+    return period.should.be.a.Number;
   });
+  return setInterval(this.comitAll(), period);
 };
 
 Engine.prototype.session = function (clientSecret) {
