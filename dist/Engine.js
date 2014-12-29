@@ -7,7 +7,7 @@ var _ref = require("nexus-uplink-common");
 var MESSAGE_TYPES = _ref.MESSAGE_TYPES;
 var Message = _ref.Message;
 var Remutable = _ref.Remutable;
-
+var sha256 = require("sha256");
 
 var DEFAULT_HANDSHAKE_TIMEOUT = 5000;
 var DEFAULT_SESSION_TIMEOUT = 5000;
@@ -19,7 +19,6 @@ var RESERVED_ACTIONS = {
 
 var INT_MAX = 9007199254740992;
 var ALLOW_RESERVED_ACTION = _.random(1, INT_MAX - 1);
-var ENGINE_SECRET = "EngineSecret" + _.random(1, INT_MAX - 1);
 
 // Alias for class Engine, to shut-up jshint
 var _Engine = undefined;
@@ -178,19 +177,18 @@ Engine.prototype.dispatch = function (clientSecret, action, params, _allowReserv
   if (_allowReservedAction === undefined) _allowReservedAction = false;
   if (_.contains(RESERVED_ACTIONS, action)) {
     _allowReservedAction.should.be.exactly(ALLOW_RESERVED_ACTION);
-    clientSecret.should.be.exactly(ENGINE_SECRET);
   }
   if (!this._actionHandlers[action]) {
     return 0;
   }
-  if (clientSecret !== ENGINE_SECRET) {
+  if (!_allowReservedAction) {
     // Ensure session exists
     this.session(clientSecret);
     // Reset the timer in case the session was about to expire
     this.resetTimeout(clientSecret);
   }
   _.each(this._actionHandlers[action], function (fn) {
-    return fn(clientSecret, params);
+    return fn(Engine.clientID(clientSecret), params);
   });
   return this._actionHandlers[action].length;
 };
@@ -381,39 +379,56 @@ Engine.prototype.handleDispatch = function (socketId, _ref6) {
 };
 
 Engine.prototype.handleSessionCreate = function (clientSecret) {
-  this.dispatch(ENGINE_SECRET, "create", { clientSecret: clientSecret }, ALLOW_RESERVED_ACTION);
+  this.dispatch(clientSecret, "create", {}, ALLOW_RESERVED_ACTION);
 };
 
 Engine.prototype.handleSessionTimeout = function (clientSecret) {
-  this.dispatch(ENGINE_SECRET, "timeout", { clientSecret: clientSecret }, ALLOW_RESERVED_ACTION);
-  var err = new Error("Session Timeout");
+  this.dispatch(clientSecret, "timeout", {}, ALLOW_RESERVED_ACTION);
+  var err = new Error("Session timeout");
   this.kill(clientSecret, { message: err.message, stack: __DEV__ ? err.stack : null });
 };
 
 Engine.prototype.handleSessionDestroy = function (clientSecret) {
-  this.dispatch(ENGINE_SECRET, "destroy", { clientSecret: clientSecret }, ALLOW_RESERVED_ACTION);
+  this.dispatch(clientSecret, "destroy", {}, ALLOW_RESERVED_ACTION);
 };
 
-Engine.prototype.send = function (socketId, message) {
+Engine.prototype.handleHandshakeTimeout = function (socketId) {
+  var err = new Error("Handshake timeout");
+  var message = Message.Error({ message: err.message, stack: __DEV__ ? err.stack : null });
+  this.send(socketId, message);
+  this.close(socketId);
+};
+
+Engine.prototype.close = function (socketId) {
   var _this11 = this;
   _.dev(function () {
     socketId.should.be.a.String;
     (_this11._connections[socketId] !== void 0).should.be.ok;
+  });
+  // Resource freeing is done in handleDisconnection()
+  this._connections[socketId].socket.close();
+};
+
+Engine.prototype.send = function (socketId, message) {
+  var _this12 = this;
+  _.dev(function () {
+    socketId.should.be.a.String;
+    (_this12._connections[socketId] !== void 0).should.be.ok;
     message.should.be.an.instanceOf(Message);
   });
   this._connections[socketId].socket.send(message.toJSON());
 };
 
 Engine.prototype.queue = function (clientSecret, message) {
-  var _this12 = this;
+  var _this13 = this;
   _.dev(function () {
     clientSecret.should.be.a.String;
-    (_this12._sessions[clientSecret] !== void 0).should.be.ok;
+    (_this13._sessions[clientSecret] !== void 0).should.be.ok;
     message.should.be.an.instanceOf(Message);
   });
   if (this._sessions[clientSecret].queue === null) {
     Object.keys(this._sessions[clientSecret].connections).forEach(function (socketId) {
-      return _this12.send(socketId, message);
+      return _this13.send(socketId, message);
     });
   } else {
     this._sessions[clientSecret].queue.push(message);
@@ -421,7 +436,7 @@ Engine.prototype.queue = function (clientSecret, message) {
 };
 
 Engine.prototype.kill = function (clientSecret, err) {
-  var _this13 = this;
+  var _this14 = this;
   _.dev(function () {
     clientSecret.should.be.a.String;
     err.should.be.an.Object;
@@ -433,10 +448,10 @@ Engine.prototype.kill = function (clientSecret, err) {
   if (_.size(this._sessions[clientSecret].connections) > 0) {
     (function () {
       var message = Message.Error({ err: err });
-      _.each(_this13._sessions[clientSecret].connections, function (socketId) {
-        return _this13.send(socketId, message);
+      _.each(_this14._sessions[clientSecret].connections, function (socketId) {
+        return _this14.send(socketId, message);
       });
-      _this13._sessions[clientSecret].connections = null;
+      _this14._sessions[clientSecret].connections = null;
     })();
   }
   // Remove the session timeout
@@ -456,41 +471,48 @@ Engine.prototype.kill = function (clientSecret, err) {
 
 // If the session is about to expire, reset its expiration timer.
 Engine.prototype.resetTimeout = function (clientSecret) {
-  var _this14 = this;
+  var _this15 = this;
   _.dev(function () {
-    return (_this14._sessions[clientSecret] !== void 0).should.be.ok;
+    return (_this15._sessions[clientSecret] !== void 0).should.be.ok;
   });
   if (this._sessions[clientSecret].sessionTimeout !== null) {
     clearTimeout(this._sessions[clientSecret].sessionTimeout);
     this._sessions[clientSecret].sessionTimeout = setTimeout(function () {
-      return _this14.handleSessionTimeout(clientSecret);
+      return _this15.handleSessionTimeout(clientSecret);
     }, this._sessionTimeout);
   }
 };
 
+Engine.clientID = function (clientSecret) {
+  _.dev(function () {
+    return clientSecret.should.be.a.String;
+  });
+  return sha256(clientSecret);
+};
+
 Engine.prototype._pause = function (clientSecret) {
-  var _this15 = this;
+  var _this16 = this;
   _.dev(function () {
     clientSecret.should.be.a.String;
-    (_this15._sessions[clientSecret] !== void 0).should.be.ok;
-    (_this15._sessions[clientSecret].sessionTimeout === null).should.be.ok;
-    (_this15._sessions[clientSecret].queue === null).should.be.ok;
-    _.size(_this15._sessions[clientSecret].connections).should.be.exactly(0);
+    (_this16._sessions[clientSecret] !== void 0).should.be.ok;
+    (_this16._sessions[clientSecret].sessionTimeout === null).should.be.ok;
+    (_this16._sessions[clientSecret].queue === null).should.be.ok;
+    _.size(_this16._sessions[clientSecret].connections).should.be.exactly(0);
   });
   this._sessions[clientSecret].sessionTimeout = setTimeout(function () {
-    return _this15.handleSessionTimeout(clientSecret);
+    return _this16.handleSessionTimeout(clientSecret);
   }, this._sessionTimeout);
   this._sessions[clientSecret].queue = [];
 };
 
 Engine.prototype._resume = function (clientSecret) {
-  var _this16 = this;
+  var _this17 = this;
   _.dev(function () {
     clientSecret.should.be.a.String;
-    (_this16._sessions[clientSecret] !== void 0).should.be.ok;
-    (_this16._sessions[clientSecret].sessionTimeout !== null).should.be.ok;
-    (_this16._sessions[clientSecret].queue !== null).should.be.ok;
-    _.size(_this16._sessions[clientSecret].connections).should.be.above(0);
+    (_this17._sessions[clientSecret] !== void 0).should.be.ok;
+    (_this17._sessions[clientSecret].sessionTimeout !== null).should.be.ok;
+    (_this17._sessions[clientSecret].queue !== null).should.be.ok;
+    _.size(_this17._sessions[clientSecret].connections).should.be.above(0);
   });
   clearTimeout(this._sessions[clientSecret].sessionTimeout);
   while (this._sessions[clientSecret].queue.length > 0) {
@@ -500,7 +522,5 @@ Engine.prototype._resume = function (clientSecret) {
 };
 
 _Engine = Engine;
-
-_.extend(Engine, { ENGINE_SECRET: ENGINE_SECRET });
 
 module.exports = { Engine: Engine };

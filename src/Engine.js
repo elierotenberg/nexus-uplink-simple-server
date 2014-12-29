@@ -1,6 +1,7 @@
 const _ = require('lodash-next');
 const HTTPExceptions = require('http-exceptions');
 const { MESSAGE_TYPES, Message, Remutable } = require('nexus-uplink-common');
+const sha256 = require('sha256');
 
 const DEFAULT_HANDSHAKE_TIMEOUT = 5000;
 const DEFAULT_SESSION_TIMEOUT = 5000;
@@ -13,7 +14,6 @@ const RESERVED_ACTIONS = {
 
 const INT_MAX = 9007199254740992;
 const ALLOW_RESERVED_ACTION = _.random(1, INT_MAX - 1);
-const ENGINE_SECRET = `EngineSecret${_.random(1, INT_MAX - 1)}`;
 
 // Alias for class Engine, to shut-up jshint
 let _Engine;
@@ -149,18 +149,17 @@ class Engine {
   dispatch(clientSecret, action, params, _allowReservedAction = false) {
     if(_.contains(RESERVED_ACTIONS, action)) {
       _allowReservedAction.should.be.exactly(ALLOW_RESERVED_ACTION);
-      clientSecret.should.be.exactly(ENGINE_SECRET);
     }
     if(!this._actionHandlers[action]) {
       return 0;
     }
-    if(clientSecret !== ENGINE_SECRET) {
+    if(!_allowReservedAction) {
       // Ensure session exists
       this.session(clientSecret);
       // Reset the timer in case the session was about to expire
       this.resetTimeout(clientSecret);
     }
-    _.each(this._actionHandlers[action], (fn) => fn(clientSecret, params));
+    _.each(this._actionHandlers[action], (fn) => fn(Engine.clientID(clientSecret), params));
     return this._actionHandlers[action].length;
   }
 
@@ -320,17 +319,33 @@ class Engine {
   }
 
   handleSessionCreate(clientSecret) {
-    this.dispatch(ENGINE_SECRET, 'create', { clientSecret }, ALLOW_RESERVED_ACTION);
+    this.dispatch(clientSecret, 'create', {}, ALLOW_RESERVED_ACTION);
   }
 
   handleSessionTimeout(clientSecret) {
-    this.dispatch(ENGINE_SECRET, 'timeout', { clientSecret }, ALLOW_RESERVED_ACTION);
-    const err = new Error(`Session Timeout`);
+    this.dispatch(clientSecret, 'timeout', {}, ALLOW_RESERVED_ACTION);
+    const err = new Error(`Session timeout`);
     this.kill(clientSecret, { message: err.message, stack: __DEV__ ? err.stack : null });
   }
 
   handleSessionDestroy(clientSecret) {
-    this.dispatch(ENGINE_SECRET, 'destroy', { clientSecret }, ALLOW_RESERVED_ACTION);
+    this.dispatch(clientSecret, 'destroy', {}, ALLOW_RESERVED_ACTION);
+  }
+
+  handleHandshakeTimeout(socketId) {
+    const err = new Error(`Handshake timeout`);
+    const message = Message.Error({ message: err.message, stack: __DEV__ ? err.stack : null });
+    this.send(socketId, message);
+    this.close(socketId);
+  }
+
+  close(socketId) {
+    _.dev(() => {
+      socketId.should.be.a.String;
+      (this._connections[socketId] !== void 0).should.be.ok;
+    });
+    // Resource freeing is done in handleDisconnection()
+    this._connections[socketId].socket.close();
   }
 
   send(socketId, message) {
@@ -396,6 +411,11 @@ class Engine {
     }
   }
 
+  static clientID(clientSecret) {
+    _.dev(() => clientSecret.should.be.a.String);
+    return sha256(clientSecret);
+  }
+
   _pause(clientSecret) {
     _.dev(() => {
       clientSecret.should.be.a.String;
@@ -426,7 +446,5 @@ class Engine {
 }
 
 _Engine = Engine;
-
-_.extend(Engine, { ENGINE_SECRET });
 
 module.exports = { Engine };

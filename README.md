@@ -63,18 +63,32 @@ const { Engine, Server } = require('nexus-uplink-server');
 const engine = new Engine();
 const server = new Server(engine);
 const todoList = engine.get('/todoList');
+const counters = engine.get('/counters');
 // send batch updates every 100ms
-setInterval(() => todoList.dirty || todoList.commit(), 100);
-engine.addActionHandler('/add-todo-item', (clientSecret, { name, description }) => {
+// you can commit on every mutation if you feel like so,
+// but batch updates are really the proper way to scale
+setInterval(() => {
+  todoList.dirty || todoList.commit();
+  counters.dirty || counters.commit();
+}, 100);
+engine.addActionHandler('/add-todo-item', (clientID, { name, description }) => {
   todoList.set(name, {
     description,
-    addedBy: md5(clientSecret), // hash clientSecret
+    addedBy: clientID,
   });
 });
-engine.addActionHandler('/complete-todo-item', (clientSecret, { name }) => {
-  if(todoList.has(name) && todoList.get(name).addedBy === md5(clientSecret)) {
+engine.addActionHandler('/complete-todo-item', (clientID, { name }) => {
+  if(todoList.has(name) && todoList.get(name).addedBy === sha256(clientID)) {
     todoList.delete(name);
   }
+});
+// /session/create and /session/destroy are special, reserved actions
+engine.addActionHandler('/sessions/create', (clientID) => {
+  counters.set('active', counters.get('active') + 1);
+  counters.set('total', counters.get('total') + 1);
+});
+engine.addActionHandler('/sessions/destroy', (clientID) => {
+  counters.set('active', counters.get('active') - 1);
 });
 server.listen(8888);
 ```
@@ -83,13 +97,21 @@ server.listen(8888);
 
 ```js
 const { Engine, Client } = require('nexus-uplink-client');
-const Engine = new Engine();
+// clientSecret must be a globally unique, cryptographic secret
+// it is typically generated at server-side rendering time
+const Engine = new Engine(clientSecret);
 const client = new Client(engine);
 const todoList = client.subscribe('/todoList');
+const counters = client.subscribe('/counters');
 todoList.afterUpdate(() => {
   console.log('todoList has been updated to', todoList);
+});
+counters.afterUpdate(() => {
+  console.log('active users:', counters.get('active'));
+  console.log('total users:', counters.get('total'));
 });
 client.dispatch('/add-todo-item', {
   name: 'My first item', description: 'This is my first item!'
 });
+counters.unsubscribe();
 ```
