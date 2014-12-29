@@ -181,7 +181,7 @@ Engine.prototype.commitAll = function () {
   };
 };
 
-Engine.prototype.commitEvery = function (period) {
+Engine.prototype.commitEveryMS = function (period) {
   _.dev(function () {
     return period.should.be.a.Number;
   });

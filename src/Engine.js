@@ -138,7 +138,7 @@ class Engine {
     return () => Object.keys(this._stores).forEach((path) => this.commit(path));
   }
 
-  commitEvery(period) {
+  commitEveryMS(period) {
     _.dev(() => period.should.be.a.Number);
     return setInterval(this.comitAll(), period);
   }
