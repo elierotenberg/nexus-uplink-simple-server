@@ -6,6 +6,8 @@ const express = require('express');
 
 const Engine = require('./Engine');
 
+const DEFAULT_PORT = 8888;
+
 class Server {
   constructor(engine, options) {
     options = options || {};
@@ -18,13 +20,14 @@ class Server {
     // configurable too
     this._io = options.io || EngineIOServer.Server();
     this._http = options.http || http.Server(this._app);
+    this._port = options.port || DEFAULT_PORT;
     this._bindIOHandlers();
     this._bindHTTPHandlers();
     this._listen = Promise.promisify(this._http.listen.bind(this._http));
   }
 
   start() {
-    return this._listen.apply(this, arguments);
+    return this._listen(this._port);
   }
 
   _bindIOHandlers() {

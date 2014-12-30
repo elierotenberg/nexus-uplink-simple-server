@@ -110,7 +110,7 @@ const { Engine, Client } = require('nexus-uplink-client');
 // clientSecret must be a globally unique, cryptographic secret
 // it is typically generated at server-side rendering time
 const Engine = new Engine(clientSecret);
-const client = new Client(engine).start('http://localhost:8888');
+const client = new Client(engine, { url: 'http://localhost:8888' }).start();
 // subscribe to several stores
 // the returned object is like a Remutable instance, initially empty
 const todoList = client.subscribe('/todoList');
