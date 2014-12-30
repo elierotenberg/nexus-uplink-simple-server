@@ -2,11 +2,13 @@
 
 require("6to5/polyfill");var Promise = (global || window).Promise = require("lodash-next").Promise;var __DEV__ = process.env.NODE_ENV !== "production";var __PROD__ = !__DEV__;var __BROWSER__ = typeof window === "object";var __NODE__ = !__BROWSER__;var _ = require("lodash-next");
 var bodyParser = require("body-parser");
-var EngineIO = require("engine.io");
+var EngineIOServer = require("engine.io");
 var http = require("http");
 var express = require("express");
 
 var Engine = require("./Engine");
+
+var DEFAULT_PORT = 8888;
 
 var Server = function Server(engine, options) {
   options = options || {};
@@ -19,11 +21,16 @@ var Server = function Server(engine, options) {
   this._app = options.app || express().use(bodyParser.json());
   // I don't really see a use case for these too but let's make it
   // configurable too
-  this._io = options.io || EngineIO.Server();
+  this._io = options.io || EngineIOServer.Server();
   this._http = options.http || http.Server(this._app);
+  this._port = options.port || DEFAULT_PORT;
   this._bindIOHandlers();
   this._bindHTTPHandlers();
-  this.listen = Promise.promisify(this._http.listen.bind(this._http));
+  this._listen = Promise.promisify(this._http.listen.bind(this._http));
+};
+
+Server.prototype.start = function () {
+  return this._listen(this._port);
 };
 
 Server.prototype._bindIOHandlers = function () {
@@ -46,4 +53,4 @@ Server.prototype._bindHTTPHandlers = function () {
 
 _.extend(Server.prototype, {
   _engine: null,
-  listen: null });
+  _listen: null });
